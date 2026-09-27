@@ -600,3 +600,34 @@ def test_a_control_entity_is_unavailable_while_the_relay_is_down(
     entity = factory(coordinator)
 
     assert entity.available is False
+
+
+def test_home_assistant_accepts_the_state_of_every_control_entity() -> None:
+    """Drive Home Assistant's own property validation, not just ours.
+
+    ``SelectEntity.state`` refuses a current option that is not in the list,
+    ``TextEntity.state`` validates against the entity's own length bounds and
+    ``NumberEntity.state`` converts through them. Those checks live in the
+    base classes and only fire when the state is actually computed, so a
+    mistake in the range, the option list or the cap would otherwise surface
+    on the user's dashboard rather than here.
+    """
+    coordinator, _relay = _enabled_coordinator(configs=RIG_CONFIG)
+
+    assert number_platform.ShellyVirtualNumber(
+        coordinator, OWNED_ID, "number:200").state == 22.5
+    assert text_platform.ShellyVirtualText(
+        coordinator, OWNED_ID, "text:200").state == "Wohnzimmer Ost"
+    assert select_platform.ShellyVirtualSelect(
+        coordinator, OWNED_ID, "enum:200").state == "comfort"
+    assert switch_platform.ShellyScriptSwitch(
+        coordinator, OWNED_ID, "script:2").state == "off"
+
+    # …and with nothing cached, which is the state every entity starts in.
+    bare, _r = _enabled_coordinator(configs=None)
+    assert number_platform.ShellyVirtualNumber(
+        bare, OWNED_ID, "number:200").state == 22.5
+    assert text_platform.ShellyVirtualText(
+        bare, OWNED_ID, "text:200").state == "Wohnzimmer Ost"
+    assert select_platform.ShellyVirtualSelect(
+        bare, OWNED_ID, "enum:200").state == "comfort"

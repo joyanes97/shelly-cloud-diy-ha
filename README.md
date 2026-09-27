@@ -114,7 +114,8 @@ cannot see — and the two run side by side.
 | 📡 **Offline detection** | A per-device **Reporting** sensor that turns off when a device stops checking in — the signal `cloud.connected` cannot give you (see below). | ✅ shipped |
 | ⚡ **Stuck-contact warning** | Warns when a relay reports itself as open while the device's own meter still sees a load — a welded contact (see below). | ✅ shipped |
 | 🩺 **Health checks** | Warns when a device runs hot, its Wi-Fi signal is weak, or it is short of memory or storage — from data the poll already returns, at no extra request (see below). | ✅ shipped |
-| 🎛️ **Cloud control** | Writes the documented API cannot do at all: switching virtual components (an irrigation controller's zones, a script's boolean) and setting a BLU TRV's target temperature. Off by default, rides an **unsupported** channel, and works only on devices your account owns (see below). | 🧪 opt-in |
+| 🎛️ **Cloud control** | Writes the documented API cannot do at all: virtual components (an irrigation controller's zones, a script's boolean, a number, a text, a dropdown), starting and stopping scripts, and setting a BLU TRV's target temperature. Off by default, rides an **unsupported** channel, and works only on devices your account owns (see below). | 🧪 opt-in |
+| 📜 **Script state** | Whether each of a device's scripts is running — the one way to notice a script that died on a device you can only reach through the cloud. No opt-in needed; starting and stopping one does need cloud control. | ✅ shipped |
 | 🌡️ **BLU TRV valves** | Thermostatic valves behind a BLU Gateway Gen3 become climate entities — room temperature, setpoint, valve position, battery. Changing the setpoint needs cloud control (see below). | ✅ shipped |
 | 📶 **BLU gateway signal** | The signal the bridging gateway reports for a Bluetooth device — the only signal figure a BLU sensor has, with the gateway's id as an attribute. | ✅ shipped |
 | 🆙 **Firmware update flag** | Tells you a Gen2+ device has an update waiting, with the offered version. A flag, not an installer. | ✅ shipped |
@@ -279,9 +280,11 @@ The whole check has an off switch in the options.
 ### Switching what the documented API cannot switch *(opt-in, unsupported)*
 
 Some things a Shelly can do have no route in the documented Cloud Control API.
-An irrigation controller's zones, or the boolean a script exposes, are *virtual
+An irrigation controller's zones, the boolean a script exposes, a setpoint kept
+in a virtual number, a mode kept in a virtual dropdown — these are *virtual
 components*: the cloud will happily tell you their state, and offers no way to
-change it. Every documented route answers "no such route" — measured, with a
+change it. A script is the same story: the cloud reports whether it runs and
+has no route to start it. Every documented route answers "no such route" — measured, with a
 known-good call answering something else, so it really is absence and not a
 wrong parameter.
 
@@ -532,9 +535,11 @@ try it, but don't depend on it yet.
 ### 🎛️ Cloud control *(opt-in, unsupported — see above)*
 
 OAuth sign-in plus the cloud WebSocket relay, used for **commands only**, on
-devices your account owns: switching the virtual components the documented API
-cannot write, and setting the target temperature of a Shelly BLU TRV behind a
-BLU Gateway Gen3.
+devices your account owns: writing the virtual components the documented API
+cannot write — booleans, numbers, texts and dropdowns — starting and stopping
+scripts, and setting the target temperature of a Shelly BLU TRV behind a BLU
+Gateway Gen3. Every control entity is created *beside* the read-only sensor of
+the same component, never instead of it.
 
 ### 🔭 Push instead of polling *(not planned as a replacement)*
 

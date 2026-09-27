@@ -120,7 +120,8 @@ die Shellys, die sie nicht sieht — und beide laufen nebeneinander.
 | 📡 **Ausfall-Erkennung** | Ein **Reporting**-Sensor je Gerät, der abfällt, sobald sich ein Gerät nicht mehr meldet — das Signal, das `cloud.connected` nicht liefern kann (siehe unten). | ✅ ausgeliefert |
 | ⚡ **Warnung bei klebendem Kontakt** | Meldet, wenn ein Relais sich als offen meldet, während die geräteeigene Messung weiter eine Last sieht — ein verschweißter Kontakt (siehe unten). | ✅ ausgeliefert |
 | 🩺 **Gesundheitsprüfung** | Meldet, wenn ein Gerät heiß läuft, sein WLAN-Signal schwach ist oder ihm Speicher ausgeht — aus Daten, die der Abruf ohnehin liefert, ohne eine einzige zusätzliche Anfrage (siehe unten). | ✅ ausgeliefert |
-| 🎛️ **Cloud-Steuerung** | Schreibzugriffe, die die dokumentierte API überhaupt nicht kann: virtuelle Komponenten schalten (die Zonen eines Bewässerungscomputers, der Boolean eines Skripts) und den Sollwert eines BLU TRV setzen. Standardmäßig aus, läuft über einen **nicht unterstützten** Kanal und funktioniert nur auf Geräten, die deinem Konto gehören (siehe unten). | 🧪 Opt-in |
+| 🎛️ **Cloud-Steuerung** | Schreibzugriffe, die die dokumentierte API überhaupt nicht kann: virtuelle Komponenten schreiben (die Zonen eines Bewässerungscomputers, der Boolean eines Skripts, eine Zahl, ein Text, eine Auswahlliste), Skripte starten und stoppen und den Sollwert eines BLU TRV setzen. Standardmäßig aus, läuft über einen **nicht unterstützten** Kanal und funktioniert nur auf Geräten, die deinem Konto gehören (siehe unten). | 🧪 Opt-in |
+| 📜 **Skript-Zustand** | Ob die Skripte eines Geräts laufen — die einzige Möglichkeit, ein gestorbenes Skript auf einem Gerät zu bemerken, das du nur über die Cloud erreichst. Braucht kein Opt-in; Starten und Stoppen schon. | ✅ ausgeliefert |
 | 🌡️ **BLU-TRV-Ventile** | Heizkörperthermostate hinter einem BLU Gateway Gen3 werden zu Climate-Entitäten — Raumtemperatur, Sollwert, Ventilstellung, Batterie. Den Sollwert zu ändern braucht die Cloud-Steuerung (siehe unten). | ✅ ausgeliefert |
 | 📶 **BLU-Gateway-Signal** | Das Signal, das das brückende Gateway für ein Bluetooth-Gerät meldet — die einzige Signalzahl, die ein BLU-Sensor hat, mit der Gateway-ID als Attribut. | ✅ ausgeliefert |
 | 🆙 **Firmware-Update-Kennzeichen** | Zeigt, dass für ein Gen2+-Gerät ein Update bereitliegt, mit der angebotenen Version. Ein Hinweis, kein Installer. | ✅ ausgeliefert |
@@ -293,9 +294,11 @@ Die ganze Prüfung lässt sich in den Optionen abschalten.
 ### Schalten, was die dokumentierte API nicht schalten kann *(Opt-in, nicht unterstützt)*
 
 Manches, was ein Shelly kann, hat in der dokumentierten Cloud-Control-API keine
-Route. Die Zonen eines Bewässerungscomputers oder der Boolean, den ein Skript
-anbietet, sind *virtuelle Komponenten*: Die Cloud verrät ihren Zustand bereitwillig
-und bietet keinen Weg, ihn zu ändern. Jede dokumentierte Route antwortet „diese
+Route. Die Zonen eines Bewässerungscomputers, der Boolean, den ein Skript
+anbietet, ein Sollwert in einer virtuellen Zahl, ein Modus in einer virtuellen
+Auswahlliste — das sind *virtuelle Komponenten*: Die Cloud verrät ihren Zustand
+bereitwillig und bietet keinen Weg, ihn zu ändern. Bei einem Skript ist es
+dasselbe: Die Cloud meldet, ob es läuft, und hat keine Route, es zu starten. Jede dokumentierte Route antwortet „diese
 Route gibt es nicht" — gemessen, mit einer bekannt funktionierenden Anfrage als
 Gegenprobe, die etwas anderes antwortet. Es ist also wirklich Abwesenheit und
 kein falscher Parameter.
@@ -561,9 +564,12 @@ Noch nicht fertig — gern ausprobieren, aber noch nicht darauf verlassen.
 ### 🎛️ Cloud-Steuerung *(Opt-in, nicht unterstützt — siehe oben)*
 
 OAuth-Anmeldung plus das Cloud-WebSocket-Relay, ausschließlich für **Befehle**
-und nur auf Geräten, die deinem Konto gehören: Schalten der virtuellen
-Komponenten, die die dokumentierte API nicht schreiben kann, und Setzen der
-Solltemperatur eines Shelly BLU TRV hinter einem BLU Gateway Gen3.
+und nur auf Geräten, die deinem Konto gehören: Schreiben der virtuellen
+Komponenten, die die dokumentierte API nicht schreiben kann — Booleans, Zahlen,
+Texte und Auswahllisten —, Starten und Stoppen von Skripten und Setzen der
+Solltemperatur eines Shelly BLU TRV hinter einem BLU Gateway Gen3. Jede
+Steuer-Entität entsteht **neben** dem Nur-Lese-Sensor derselben Komponente, nie
+an seiner Stelle.
 
 ### 🔭 Push statt Polling *(nicht als Ersatz geplant)*
 

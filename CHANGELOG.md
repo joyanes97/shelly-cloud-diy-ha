@@ -9,6 +9,32 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## v0.14.0 — 2026-09-27
+
+- **New: virtual numbers, texts and dropdowns can be written, not just read.**
+  A Gen2+ device's virtual `number`, `text` and `enum` components have been
+  read-only sensors since v0.6.0. With cloud control switched on, each one now
+  also gets a control entity beside its sensor — a number with the component's
+  own range, step and unit, a text box capped at its own length limit, and a
+  dropdown carrying its configured options. The sensors stay exactly where they
+  are, so nothing that already points at one has to change (#48).
+- **New: a script's running state, and a switch to start and stop it.** Every
+  Gen2+ device that carries a script now reports whether it is running, for
+  everybody — that one needs no opt-in, because the flag rides in the ordinary
+  poll and a script that died on a device you can only reach through the cloud
+  is otherwise invisible. With cloud control on, a switch starts and stops it.
+  Both carry the script's own name (#48).
+- The write paths were measured on real hardware before they were built, not
+  inferred from the documentation: a virtual number, text and enum plus a
+  throw-away script were created on a Shelly 1PM Mini G3, written through the
+  cloud relay, and the device's own value read back locally after every write.
+  The negative control — the same call with only the value invalid — was
+  refused and changed nothing, so a success answer really does mean the write
+  happened.
+- Devices whose only writable component is a number, text, enum or script are
+  now included in the ownership probe. Before this they were never asked about,
+  so they could never have gained a control entity whatever the relay said.
+
 ## v0.13.0 — 2026-09-27
 
 - **New: Shelly BLU TRV thermostatic valves.** A BLU Gateway Gen3 carries each

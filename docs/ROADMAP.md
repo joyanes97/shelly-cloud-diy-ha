@@ -32,15 +32,16 @@ traceability only. No upstream merges are expected.
 
 Status key: ✅ done · 🔄 in progress · ⏳ planned · 💡 aspirational
 
-> **Where the project stands (2026-09-27, `v0.13.0`):** Milestones 0, 1 and 3
+> **Where the project stands (2026-09-27, `v0.14.0`):** Milestones 0, 1 and 3
 > are done — the integration is released, in the HACS default store, and has
 > grown well past the original M1 scope (Gen1/Gen2/Gen3 devices, BLU family,
 > energy monitoring, virtual components, an offline detector, a relay-fault
 > detector, a repairs platform and device health checks). Milestone 2 has
-> split: its **control** half — switching virtual components on owned devices
-> over OAuth — shipped in v0.12.0 and extended in v0.13.0 to the setpoint of a
-> BLU TRV behind a BLU Gateway Gen3, while its original **push** half is
-> measured, narrower than assumed, and not built. See its section.
+> split: its **control** half — writing components on owned devices over OAuth
+> — shipped in v0.12.0 and has grown since: the setpoint of a BLU TRV behind a
+> BLU Gateway Gen3 in v0.13.0, and virtual numbers, texts, dropdowns and a
+> script's start/stop in v0.14.0. Its original **push** half is measured,
+> narrower than assumed, and not built. See its section.
 
 ### Milestone 0 — Foundation  ✅
 
@@ -152,7 +153,7 @@ session turned out to unlock something the documented API cannot do at all:
 **writing** to a device. So the milestone has two halves now, and the valuable
 one is no longer the one it was named after.
 
-#### 2.1 Cloud control for owned devices — shipped in v0.12.0, extended in v0.13.0  ✅
+#### 2.1 Cloud control for owned devices — shipped in v0.12.0, extended in v0.13.0 and v0.14.0  ✅
 
 Off by default. What it does, and what it costs:
 
@@ -164,6 +165,12 @@ Off by default. What it does, and what it costs:
 - They *can* be written over the same cloud WebSocket relay the Shelly app
   uses, which is a generic JRPC relay. `Boolean.Set` on a virtual component
   succeeded over it on real hardware.
+- The same relay carries every other virtual component and a script's run
+  state (v0.14.0): `Number.Set`, `Text.Set`, `Enum.Set`, `Script.Start` and
+  `Script.Stop` were each measured on a Shelly 1PM Mini G3 by writing through
+  the cloud and reading the device's own value back locally, with the same
+  call and an invalid value as the negative control. Each one is a control
+  entity created *beside* the component's existing read-only sensor.
 - The same relay carries the **setpoint of a Shelly BLU TRV** (v0.13.0). The
   valve is a Bluetooth device with no cloud identity, so the call goes to its
   BLU Gateway Gen3 and wraps the valve's own RPC: `BluTrv.Call` carrying
