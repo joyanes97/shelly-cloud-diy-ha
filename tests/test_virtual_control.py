@@ -631,3 +631,56 @@ def test_home_assistant_accepts_the_state_of_every_control_entity() -> None:
         bare, OWNED_ID, "text:200").state == "Wohnzimmer Ost"
     assert select_platform.ShellyVirtualSelect(
         bare, OWNED_ID, "enum:200").state == "comfort"
+
+
+def _run_platform_setup(module: Any, coordinator: ShellyCloudCoordinator) -> list[Any]:
+    """Run a platform's real ``async_setup_entry`` against a fake hass.
+
+    The dispatcher is stubbed for the same reason the switch platform's test
+    stubs it — connecting a signal needs a running Home Assistant — and what
+    is under test is which entities the builder hands back.
+    """
+    added: list[Any] = []
+    hass = SimpleNamespace(data={"shelly_cloud_diy": {"e1": coordinator}})
+    entry = SimpleNamespace(entry_id="e1", async_on_unload=lambda cb: None)
+    original = module.async_dispatcher_connect
+    module.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
+    try:
+        asyncio.run(
+            module.async_setup_entry(hass, entry, lambda ents: added.extend(ents))
+        )
+    finally:
+        module.async_dispatcher_connect = original
+    return added
+
+
+def test_each_platform_builds_exactly_its_own_components() -> None:
+    """The wiring, not just the entity: one device, four platforms."""
+    coordinator, _relay = _enabled_coordinator(configs=RIG_CONFIG)
+    coordinator.is_enabled = lambda device_id: True
+
+    assert [e.unique_id for e in _run_platform_setup(number_platform, coordinator)] == [
+        f"{OWNED_ID}_number:200_control"
+    ]
+    assert [e.unique_id for e in _run_platform_setup(text_platform, coordinator)] == [
+        f"{OWNED_ID}_text:200_control"
+    ]
+    assert [e.unique_id for e in _run_platform_setup(select_platform, coordinator)] == [
+        f"{OWNED_ID}_enum:200_control"
+    ]
+    switches = [e.unique_id for e in _run_platform_setup(switch_platform, coordinator)]
+    assert f"{OWNED_ID}_script:1_control" in switches
+    assert f"{OWNED_ID}_script:2_control" in switches
+    assert f"{OWNED_ID}_boolean:200_control" in switches
+
+
+def test_the_new_platforms_build_nothing_while_cloud_control_is_off() -> None:
+    coordinator = _coordinator(relay=None, options={}, configs=RIG_CONFIG)
+    coordinator.is_enabled = lambda device_id: True
+
+    for module in (number_platform, text_platform, select_platform):
+        assert _run_platform_setup(module, coordinator) == []
+    # The switch platform still builds the hardware relay, and nothing else.
+    assert [e.unique_id for e in _run_platform_setup(switch_platform, coordinator)] == [
+        f"{OWNED_ID}_switch_0"
+    ]
