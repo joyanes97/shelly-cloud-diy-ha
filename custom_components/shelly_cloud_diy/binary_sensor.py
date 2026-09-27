@@ -15,7 +15,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SIGNAL_DEVICE_REMOVED, device_gen, is_gen2_status
+from .const import (
+    DOMAIN,
+    SCRIPT_KEY_RE,
+    SIGNAL_DEVICE_REMOVED,
+    device_gen,
+    is_gen2_status,
+)
 from .coordinator import ShellyCloudCoordinator, SIGNAL_NEW_DEVICE
 from .entities.base import ShellyBaseEntity
 from .entities.descriptions import (
@@ -459,6 +465,23 @@ def _create_rpc_sensors(
                         coordinator, device_id, idx, key
                     ))
 
+    # Scripts (READ-ONLY) — ``script:<id>.running``. Available to everyone,
+    # cloud control or not: the running flag rides in the ordinary poll, and
+    # a script that died on a device you cannot reach locally is invisible
+    # otherwise. Gated on the field, not the key: ``running`` is the one
+    # field every measured script carried, while ``errors`` was present on
+    # one script and absent on another in the same response — so nothing here
+    # is built on it. (#48)
+    for key, payload in status.items():
+        if not SCRIPT_KEY_RE.match(key) or not isinstance(payload, dict):
+            continue
+        if payload.get("running") is None:
+            continue
+        uid = f"{device_id}_{key}_running"
+        if uid not in created:
+            created.add(uid)
+            entities.append(ShellyScriptBinarySensor(coordinator, device_id, key))
+
     return entities
 
 
@@ -584,6 +607,49 @@ class RpcVirtualBinarySensor(ShellyBaseEntity, BinarySensorEntity):
         if value is None:
             return None
         return bool(value)
+
+
+class ShellyScriptBinarySensor(ShellyBaseEntity, BinarySensorEntity):
+    """Whether a Gen2+ script is running (``script:<id>.running``).
+
+    Diagnostic on purpose: a script is a device-internal detail, not the
+    reading the device was bought for. It is still worth an entity, because
+    for a device this integration reaches only through the cloud there is no
+    other way to notice that a script stopped.
+
+    The name comes from the same cached v2 config the virtual components use
+    — a script's settings entry carries its ``name`` — with the generic
+    ``Script <id>`` until (or unless) that fetch resolves.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: ShellyCloudCoordinator,
+        device_id: str,
+        component_key: str,
+    ) -> None:
+        """Initialize the script running sensor."""
+        super().__init__(coordinator, device_id, 0)
+        self._component_key = component_key
+        self._attr_unique_id = f"{device_id}_{component_key}_running"
+        self._generic_name = f"Script {component_key.split(':', 1)[1]}"
+
+    @property
+    def name(self) -> str:
+        """The script's own name, or the generic fallback."""
+        return self.virtual_component_name(self._component_key) or self._generic_name
+
+    @property
+    def is_on(self) -> bool | None:
+        """Whether the script is running."""
+        component = self.device_status.get(self._component_key)
+        if not isinstance(component, dict):
+            return None
+        running = component.get("running")
+        return None if running is None else bool(running)
 
 
 def _create_ble_binary_sensors(

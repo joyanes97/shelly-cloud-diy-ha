@@ -201,8 +201,11 @@ PLATFORMS: list[Platform] = [
     Platform.CLIMATE,
     Platform.COVER,
     Platform.LIGHT,
+    Platform.NUMBER,
+    Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.TEXT,
 ]
 
 # ── Device-generation detection ────────────────────────────────────
@@ -249,6 +252,33 @@ _GEN2_PATTERN = re.compile(
 # write path), the sensor platform (battery / signal) and the climate
 # platform, so it lives here rather than being spelled three times.
 BLUTRV_KEY_RE = re.compile(r"^blutrv:(\d+)$")
+
+# The writable Gen2/Gen3 components behind the opt-in cloud relay, one regex
+# each because every one of them is parsed for its id and then addressed by a
+# different RPC method. Shared by the coordinator (which sends), the platforms
+# (which build the entities) and the ownership probe (which decides whether a
+# device is worth asking about), so they live here rather than in three files.
+#
+# ``script:<id>`` is the odd one out: it is not a virtual component at all, it
+# is a real component of the device. It is listed here because it shares the
+# one property that matters — the documented HTTP API cannot touch it and the
+# relay can (measured 2026-09-27: ``Script.Start`` / ``Script.Stop``). (#48)
+VIRTUAL_BOOLEAN_KEY_RE = re.compile(r"^boolean:(\d+)$")
+VIRTUAL_NUMBER_KEY_RE = re.compile(r"^number:(\d+)$")
+VIRTUAL_TEXT_KEY_RE = re.compile(r"^text:(\d+)$")
+VIRTUAL_ENUM_KEY_RE = re.compile(r"^enum:(\d+)$")
+SCRIPT_KEY_RE = re.compile(r"^script:(\d+)$")
+
+# What a virtual number's range is when the v2 config has not arrived — or
+# carries no ``min``/``max``, which is legal. Home Assistant's own default is
+# 0–100, and a component holding 5000 would then be rejected by the entity
+# before the write was ever attempted. Wide and honest beats narrow and wrong.
+VIRTUAL_NUMBER_FALLBACK_MIN = -1e9
+VIRTUAL_NUMBER_FALLBACK_MAX = 1e9
+
+# A Shelly text component's own default cap, echoed by the device in
+# ``max_len`` on the measured rig. Used only when the config is not (yet) here.
+VIRTUAL_TEXT_FALLBACK_MAX_LEN = 255
 
 # The valve's own setpoint range. Shelly's BLU TRV accepts 4–30 °C and
 # answers anything outside it with an RPC error, so the write path stops

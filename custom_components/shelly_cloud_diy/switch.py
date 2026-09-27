@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, SIGNAL_DEVICE_REMOVED
 from .coordinator import ShellyCloudCoordinator, SIGNAL_NEW_DEVICE
 from .entities.base import ShellyBaseEntity
+from .entities.control import ShellyVirtualControlEntity, controllable_keys
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,20 +31,16 @@ def _controllable_boolean_keys(
     coordinator: ShellyCloudCoordinator,
     device_id: str,
 ) -> list[str]:
-    """Virtual boolean keys this device may be given a control entity for.
+    """Virtual boolean keys this device may be given a control entity for."""
+    return controllable_keys(coordinator, device_id, "cloud_control_boolean_keys")
 
-    Both questions go to the coordinator, and both go through ``getattr``.
-    That is not defensive clutter but the platform's half of the opt-in
-    contract: anything that is not a coordinator running with cloud control
-    switched on answers "none", and this platform then behaves exactly as it
-    did before the feature existed. Which components are writable is the
-    coordinator's knowledge — it is the side that has to send the command.
-    """
-    controllable = getattr(coordinator, "is_cloud_controllable", None)
-    boolean_keys = getattr(coordinator, "cloud_control_boolean_keys", None)
-    if not callable(controllable) or not callable(boolean_keys):
-        return []
-    return boolean_keys(device_id) if controllable(device_id) else []
+
+def _controllable_script_keys(
+    coordinator: ShellyCloudCoordinator,
+    device_id: str,
+) -> list[str]:
+    """Script keys this device may be given a start/stop switch for."""
+    return controllable_keys(coordinator, device_id, "cloud_control_script_keys")
 
 
 async def async_setup_entry(
@@ -94,6 +91,13 @@ async def async_setup_entry(
                 entities.append(
                     ShellyVirtualBooleanSwitch(coordinator, device_id, key)
                 )
+
+        # Scripts, same channel and the same opt-in. (#48)
+        for key in _controllable_script_keys(coordinator, device_id):
+            unique_id = f"{device_id}_{key}_control"
+            if unique_id not in created_entities:
+                created_entities.add(unique_id)
+                entities.append(ShellyScriptSwitch(coordinator, device_id, key))
 
         if entities:
             _LOGGER.info("Created %d switches for %s", len(entities), device_id)
@@ -305,5 +309,41 @@ class ShellyVirtualBooleanSwitch(ShellyBaseEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set the virtual boolean to false."""
         await self.coordinator.async_set_virtual_boolean(
+            self._device_id, self._component_key, False
+        )
+
+
+class ShellyScriptSwitch(ShellyVirtualControlEntity, ShellyBaseEntity, SwitchEntity):
+    """Start / stop a Gen2+ script (``script:<id>``) over the cloud relay.
+
+    Created in addition to the read-only running sensor in
+    ``binary_sensor.py``, and only where cloud control is on and the relay
+    routes to the device — the same shape as the virtual boolean switch, for
+    the same reasons.
+
+    ``Script.Start`` / ``Script.Stop``, deliberately not
+    ``Script.SetConfig{enable}``: ``enable`` is the autostart flag, and what
+    the cloud status reports is ``running``. An entity that writes one field
+    and reads another cannot be confirmed by the poll — and confirmation by
+    the poll is the whole contract of this channel.
+    """
+
+    _kind = "Script"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Whether the script is running, as the poll last saw it."""
+        running = self.component().get("running")
+        return None if running is None else bool(running)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Start the script."""
+        await self.coordinator.async_set_script_running(
+            self._device_id, self._component_key, True
+        )
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Stop the script."""
+        await self.coordinator.async_set_script_running(
             self._device_id, self._component_key, False
         )

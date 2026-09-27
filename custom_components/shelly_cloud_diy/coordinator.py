@@ -61,7 +61,12 @@ from .const import (
     OWNERSHIP_REPROBE_INTERVAL_S,
     POLL_INTERVAL_DEFAULT,
     RELAY_FAULT_DETECTION_DEFAULT,
+    SCRIPT_KEY_RE,
     SIGNAL_NEW_DEVICE,
+    VIRTUAL_BOOLEAN_KEY_RE,
+    VIRTUAL_ENUM_KEY_RE,
+    VIRTUAL_NUMBER_KEY_RE,
+    VIRTUAL_TEXT_KEY_RE,
     device_gen,
     is_gen2_status,
 )
@@ -91,15 +96,27 @@ from .repair_issues import (
 # stay under the 1 req/s per-account rate limit that both endpoints share.
 _V2_NAME_LOOKUP_GAP_S = 1.2
 
-# Status/config keys of Gen2/Gen3 virtual components (``number:200``, …). Used
-# to decide which online devices need a one-time v2 config fetch so their
-# read-only virtual entities can render real names/units/options. (#9)
-_VIRTUAL_COMPONENT_KEY_RE = re.compile(r"^(number|enum|text|boolean):\d+$")
+# Status/config keys whose v2 ``settings`` entry is worth a one-time fetch, so
+# the entities built from them can render real names, units and options. (#9)
+#
+# ``script`` joined the set in #48. It costs no extra request on a device that
+# already carries a virtual component — the whole ``settings`` blob is fetched
+# and filtered — and it is what turns "Script 1" into the script's own name.
+# On a device whose *only* entry here is a script it does cost one lazy,
+# cached, batched fetch, which is the price of naming it.
+_VIRTUAL_COMPONENT_KEY_RE = re.compile(r"^(number|enum|text|boolean|script):\d+$")
 
-# The only component this integration can WRITE over the cloud relay. Kept
-# separate from the read-only set above: everything there is rendered, only
-# a boolean can be set (``Boolean.Set``, the one write measured to work).
-_VIRTUAL_BOOLEAN_KEY_RE = re.compile(r"^boolean:(\d+)$")
+# The components this integration can WRITE over the cloud relay. Measured on
+# real hardware, never assumed: ``Boolean.Set`` on 2026-08-09, the other four
+# on 2026-09-27 (each verified by reading the device's own value back locally
+# afterwards). The documented HTTP API can write none of them. (#9, #48)
+_RELAY_WRITABLE_KEY_RES = (
+    VIRTUAL_BOOLEAN_KEY_RE,
+    VIRTUAL_NUMBER_KEY_RE,
+    VIRTUAL_TEXT_KEY_RE,
+    VIRTUAL_ENUM_KEY_RE,
+    SCRIPT_KEY_RE,
+)
 
 # ── Deep-sleep (battery) device freshness ─────────────────────────────
 #
@@ -1360,14 +1377,40 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """
         return frozenset(self._ownership_unresolved)
 
-    def cloud_control_boolean_keys(self, device_id: str) -> list[str]:
-        """Virtual boolean keys on a device that cloud control may write."""
+    def _writable_keys(self, device_id: str, pattern: re.Pattern) -> list[str]:
+        """Component keys of one kind that the poll actually saw on a device.
+
+        The dict check is the gate, not the key: the cloud omits and truncates
+        components, and a key whose payload is not an object is a component we
+        cannot read a value out of — so building a control for it would offer
+        a command with no way to confirm it.
+        """
         status = self.devices.get(device_id, {}).get("status") or {}
         return sorted(
             key
             for key, value in status.items()
-            if _VIRTUAL_BOOLEAN_KEY_RE.match(key) and isinstance(value, dict)
+            if pattern.match(key) and isinstance(value, dict)
         )
+
+    def cloud_control_boolean_keys(self, device_id: str) -> list[str]:
+        """Virtual boolean keys on a device that cloud control may write."""
+        return self._writable_keys(device_id, VIRTUAL_BOOLEAN_KEY_RE)
+
+    def cloud_control_number_keys(self, device_id: str) -> list[str]:
+        """Virtual number keys on a device that cloud control may write."""
+        return self._writable_keys(device_id, VIRTUAL_NUMBER_KEY_RE)
+
+    def cloud_control_text_keys(self, device_id: str) -> list[str]:
+        """Virtual text keys on a device that cloud control may write."""
+        return self._writable_keys(device_id, VIRTUAL_TEXT_KEY_RE)
+
+    def cloud_control_enum_keys(self, device_id: str) -> list[str]:
+        """Virtual enum keys on a device that cloud control may write."""
+        return self._writable_keys(device_id, VIRTUAL_ENUM_KEY_RE)
+
+    def cloud_control_script_keys(self, device_id: str) -> list[str]:
+        """Script keys on a device that cloud control may start and stop."""
+        return self._writable_keys(device_id, SCRIPT_KEY_RE)
 
     def _control_candidates(self) -> list[str]:
         """Enabled devices worth spending an ownership probe on.
@@ -1394,12 +1437,13 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             status = info.get("status") or {}
             if device_gen(status) == "GBLE" or not is_gen2_status(status):
                 continue
-            # Virtual booleans and BLU TRVs both need the opt-in relay, and
-            # for both the relay target is this device: for a valve that is
-            # the gateway, never the valve's own BLE address, which the
-            # relay refuses with ``WRONG_ID``. (#48)
+            # Every component the relay can write, plus BLU TRVs. For all of
+            # them the relay target is this device: for a valve that is the
+            # gateway, never the valve's own BLE address, which the relay
+            # refuses with ``WRONG_ID``. (#48)
             if any(
-                _VIRTUAL_BOOLEAN_KEY_RE.match(key) or BLUTRV_KEY_RE.match(key)
+                BLUTRV_KEY_RE.match(key)
+                or any(pattern.match(key) for pattern in _RELAY_WRITABLE_KEY_RES)
                 for key in status
             ):
                 candidates.append(device_id)
@@ -1564,6 +1608,33 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         finally:
             self._ownership_task = None
 
+    def _component_id_for_write(
+        self,
+        device_id: str,
+        component_key: str,
+        pattern: re.Pattern,
+        kind: str,
+    ) -> tuple[ShellyCloudWebSocket, int]:
+        """Return the open relay and the component id, or raise saying why.
+
+        The three refusals a user can hit are separated on purpose, because
+        each has a different fix: the option is off, the relay will not route
+        to this device, or the entity was pointed at the wrong component.
+        """
+        ws = self._cloud_ws
+        if ws is None:
+            raise HomeAssistantError(
+                "Cloud control is not connected for this Shelly account"
+            )
+        if not self.is_cloud_controllable(device_id):
+            raise HomeAssistantError(
+                f"Shelly Cloud will not route commands to device {device_id}"
+            )
+        match = pattern.match(component_key)
+        if match is None:
+            raise HomeAssistantError(f"{component_key} is not a {kind}")
+        return ws, int(match.group(1))
+
     async def async_set_virtual_boolean(
         self, device_id: str, component_key: str, value: bool
     ) -> None:
@@ -1577,29 +1648,90 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         own errors already are one) and surfaces in the UI and in automation
         traces, and confirmation is asked of the poll rather than assumed.
         """
-        ws = self._cloud_ws
-        if ws is None:
-            raise HomeAssistantError(
-                "Cloud control is not connected for this Shelly account"
-            )
-        if not self.is_cloud_controllable(device_id):
-            raise HomeAssistantError(
-                f"Shelly Cloud will not route commands to device {device_id}"
-            )
-        match = _VIRTUAL_BOOLEAN_KEY_RE.match(component_key)
-        if match is None:
-            raise HomeAssistantError(
-                f"{component_key} is not a virtual boolean component"
-            )
-
+        ws, comp_id = self._component_id_for_write(
+            device_id, component_key, VIRTUAL_BOOLEAN_KEY_RE,
+            "virtual boolean component",
+        )
         await ws.send_jrpc_request(
-            device_id,
-            "Boolean.Set",
-            {"id": int(match.group(1)), "value": bool(value)},
+            device_id, "Boolean.Set", {"id": comp_id, "value": bool(value)}
         )
         # Ask for the state instead of asserting it. An optimistic write is
         # precisely what would hide a zone that accepted the command and did
         # not move; the poll is what can tell the difference.
+        await self.async_request_refresh()
+
+    async def async_set_virtual_number(
+        self, device_id: str, component_key: str, value: float
+    ) -> None:
+        """Set a virtual number on an owned device, over the cloud relay.
+
+        No range check here. A virtual number's ``min``/``max`` are optional
+        and live in a v2 config that may not have arrived, so a check here
+        would be a guess; the device checks for real and answers ``-103``
+        (measured), which the relay turns into a raised error. The entity
+        carries the range for the UI — this path carries the truth.
+        """
+        ws, comp_id = self._component_id_for_write(
+            device_id, component_key, VIRTUAL_NUMBER_KEY_RE,
+            "virtual number component",
+        )
+        await ws.send_jrpc_request(
+            device_id, "Number.Set", {"id": comp_id, "value": float(value)}
+        )
+        await self.async_request_refresh()
+
+    async def async_set_virtual_text(
+        self, device_id: str, component_key: str, value: str
+    ) -> None:
+        """Set a virtual text on an owned device, over the cloud relay."""
+        ws, comp_id = self._component_id_for_write(
+            device_id, component_key, VIRTUAL_TEXT_KEY_RE,
+            "virtual text component",
+        )
+        await ws.send_jrpc_request(
+            device_id, "Text.Set", {"id": comp_id, "value": str(value)}
+        )
+        await self.async_request_refresh()
+
+    async def async_set_virtual_enum(
+        self, device_id: str, component_key: str, value: str
+    ) -> None:
+        """Set a virtual enum on an owned device, over the cloud relay.
+
+        The option list is not validated here for the same reason the number
+        range is not: the cached config can lag the device. An option the
+        component does not know comes back as ``Invalid argument 'value': not
+        in options!`` — a refusal that reaches the user, rather than a silent
+        correction that does not.
+        """
+        ws, comp_id = self._component_id_for_write(
+            device_id, component_key, VIRTUAL_ENUM_KEY_RE,
+            "virtual enum component",
+        )
+        await ws.send_jrpc_request(
+            device_id, "Enum.Set", {"id": comp_id, "value": str(value)}
+        )
+        await self.async_request_refresh()
+
+    async def async_set_script_running(
+        self, device_id: str, component_key: str, running: bool
+    ) -> None:
+        """Start or stop a script on an owned device, over the cloud relay.
+
+        ``Script.Start`` / ``Script.Stop``, deliberately not
+        ``Script.SetConfig``. Both work over the relay (measured), but
+        ``enable`` is the autostart flag and the cloud status reports
+        ``running`` — writing one field and reading another would leave the
+        entity unable to confirm itself.
+        """
+        ws, comp_id = self._component_id_for_write(
+            device_id, component_key, SCRIPT_KEY_RE, "script component",
+        )
+        await ws.send_jrpc_request(
+            device_id,
+            "Script.Start" if running else "Script.Stop",
+            {"id": comp_id},
+        )
         await self.async_request_refresh()
 
     async def async_set_blutrv_target(

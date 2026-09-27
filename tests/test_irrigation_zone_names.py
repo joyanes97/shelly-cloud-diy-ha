@@ -134,8 +134,10 @@ def test_service_block_survives_the_config_harvest():
     kept = result[DEVICE_ID]
     assert kept["service:0"]["zones"][0]["name"] == "Lawn North"
     assert kept["boolean:200"]["role"] == "zone0"
-    # Everything else is still dropped so the cache stays small.
-    assert set(kept) == {"boolean:200", "service:0"}
+    # Everything else is still dropped so the cache stays small. ``script:1``
+    # joined the kept set in #48 — it is what names the script entities, and
+    # it rides in the same already-fetched ``settings`` object.
+    assert set(kept) == {"boolean:200", "script:1", "service:0"}
 
 
 def test_non_virtual_settings_alone_still_yield_nothing():
