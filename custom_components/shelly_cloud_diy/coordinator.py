@@ -118,6 +118,100 @@ _RELAY_WRITABLE_KEY_RES = (
     SCRIPT_KEY_RE,
 )
 
+# A Shelly BLU TRV's own BLE address, as the gateway reports it under
+# ``blutrv_rinfo:<id>.device_info``. Which key holds it is NOT confirmed here:
+# the sanitised snapshot that proved the alias lookup works did not include
+# the block, and the reporter's own implementation reads ``mac`` or ``id``.
+# All three spellings are accepted rather than guessed at, and the day a
+# verbatim block turns up this shrinks to one. (#48)
+_BLE_ADDRESS_FIELDS = ("mac", "id", "addr")
+
+_BLUTRV_RINFO_KEY_RE = re.compile(r"^blutrv_rinfo:(\d+)$")
+
+
+def _normalise_ble_address(value: Any) -> str | None:
+    """Reduce a BLE address to bare lower-case hex, or None.
+
+    The same address is spelled ``f8:44:77:28:bf:0a`` in one payload and
+    ``F84477 28BF0A`` in another, so the comparison is made on the hex
+    digits alone. Anything shorter than an address is rejected rather than
+    padded — a partial match here would attach a stranger's name to a valve.
+    """
+    if not isinstance(value, str):
+        return None
+    compact = "".join(ch for ch in value.lower() if ch in "0123456789abcdef")
+    return compact[-12:] if len(compact) >= 12 else None
+
+
+def resolve_blu_trv_aliases(
+    statuses: dict[str, dict[str, Any]],
+    records: dict[str, Any],
+) -> dict[str, dict[str, str]]:
+    """Map each gateway's BLU TRVs to the alias set in the Shelly app.
+
+    A BLU TRV has no cloud identity of its own, but it *does* have a record
+    of its own in the account's ``/interface/device/list`` listing — a
+    gateway child carrying the valve's BLE address and the name the user
+    typed. The valve's address is read from the gateway's own status, and the
+    two are matched on the address.
+
+    Measured by @gerok1984 on a BLU Gateway Gen3 with two valves, including
+    the two roads that do **not** work: the valve's v2 config and the
+    ``bthomedevice:<id>`` it points at both answer ``name: null``. The child
+    channel number (``2200`` for valve 200) is not used either — it looks
+    like a derivation and he established it is not a reliable one. (#48)
+
+    Args:
+        statuses: ``{device_id: status}`` for the devices to resolve.
+        records: The raw ``data.devices`` map of the alias listing.
+
+    Returns:
+        ``{gateway_id: {"blutrv:<id>": alias}}``, omitting every gateway and
+        every valve with no alias. An unmatched valve keeps its positional
+        fallback name, which is a better answer than a guessed one.
+    """
+    by_address: dict[str, str] = {}
+    for record in records.values():
+        if not isinstance(record, dict):
+            continue
+        address = _normalise_ble_address(record.get("addr"))
+        if address is None or address in by_address:
+            continue
+        name = record.get("name")
+        if isinstance(name, str) and name.strip():
+            by_address[address] = name.strip()
+    if not by_address:
+        return {}
+
+    aliases: dict[str, dict[str, str]] = {}
+    for device_id, status in statuses.items():
+        if not isinstance(status, dict):
+            continue
+        found: dict[str, str] = {}
+        for key, value in status.items():
+            match = _BLUTRV_RINFO_KEY_RE.match(key) if isinstance(key, str) else None
+            if match is None or not isinstance(value, dict):
+                continue
+            info = value.get("device_info")
+            if not isinstance(info, dict):
+                continue
+            address = next(
+                (
+                    normalised
+                    for field in _BLE_ADDRESS_FIELDS
+                    if (normalised := _normalise_ble_address(info.get(field)))
+                ),
+                None,
+            )
+            if address is None:
+                continue
+            if alias := by_address.get(address):
+                found[f"blutrv:{match.group(1)}"] = alias
+        if found:
+            aliases[device_id] = found
+    return aliases
+
+
 # ── Deep-sleep (battery) device freshness ─────────────────────────────
 #
 # Battery devices (H&T, Flood, Door/Window, …) are awake for a few seconds
@@ -409,6 +503,10 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # new devices appear; we never re-fetch already-known names (they
         # change rarely and cost rate-limit budget).
         self.device_names: dict[str, str] = {}
+        # Gateway device id -> ``blutrv:<id>`` -> the valve's Shelly-App
+        # alias. Filled from the same alias listing the device names come
+        # from, so it costs no request of its own. (#48)
+        self.blu_trv_names: dict[str, dict[str, str]] = {}
         # Ids covered by a completed name lookup, including those the account
         # has no alias for — keeps a never-renamed device from re-triggering
         # the lookup on every poll. (#13)
@@ -1221,7 +1319,7 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """
         try:
             await asyncio.sleep(_V2_NAME_LOOKUP_GAP_S)
-            names = await self._api.get_device_names(ids)
+            records = await self._api.get_device_records()
         except ShellyCloudAuthError:
             _LOGGER.debug("Device name lookup rejected auth_key — skipping")
             return
@@ -1233,6 +1331,28 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         self._names_attempted.update(ids)
 
+        wanted = set(ids)
+        names = {
+            did: record["name"].strip()
+            for did, record in records.items()
+            if did in wanted
+            and isinstance(record, dict)
+            and isinstance(record.get("name"), str)
+            and record["name"].strip()
+        }
+        # The valve aliases ride in the same response and are resolved for
+        # every gateway in this batch, whether or not the gateway itself has
+        # an alias — the two are independent. (#48)
+        aliases = resolve_blu_trv_aliases(
+            {
+                did: (self.devices.get(did, {}) or {}).get("status") or {}
+                for did in ids
+            },
+            records,
+        )
+        if aliases:
+            self.blu_trv_names.update(aliases)
+
         if not names:
             return
 
@@ -1241,7 +1361,12 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             entry = self.devices.get(did)
             if entry is not None:
                 entry["name"] = name
-        _LOGGER.info("Resolved %d device name(s) from the cloud alias list", len(names))
+        _LOGGER.info(
+            "Resolved %d device name(s) and %d BLU TRV alias(es) from the cloud "
+            "alias list",
+            len(names),
+            sum(len(valves) for valves in aliases.values()),
+        )
 
         # Push the resolved names into the HA device registry so existing
         # DeviceEntry rows (created at integration setup with a fallback

@@ -147,17 +147,33 @@ class ShellyBluTrvClimate(ShellyBaseEntity, ClimateEntity):
         super().__init__(coordinator, device_id, display_index)
         self._component_key = component_key
         self._attr_unique_id = f"{device_id}_{component_key}_climate"
-
-        # The name the user typed in the Shelly app, if the cloud carries it.
-        # It does not today — the v2 config fetch is scoped to the virtual
-        # components, and no snapshot has yet shown a name on a ``blutrv``
-        # component — so in practice this falls through to the positional
-        # name. Left in place because it costs nothing and is the same hook
-        # every other component name goes through.
-        configured = self.virtual_component_name(component_key)
-        self._attr_name = configured or (
+        self._fallback_name = (
             "BLU TRV" if display_index == 0 else f"BLU TRV {display_index + 1}"
         )
+
+    @property
+    def name(self) -> str:
+        """The valve's Shelly-App alias, or its position on the gateway.
+
+        A property rather than a fixed name because the alias is resolved by
+        a background task after the entity exists — and because it may never
+        resolve, which is why the positional fallback stays.
+
+        Two roads to the name were measured and found closed: the valve's own
+        v2 config answers ``name: null``, and so does the
+        ``bthomedevice:<id>`` it points at. The one that works is the
+        account's alias listing, where each valve has a child record of its
+        own — resolved in the coordinator, which is the side that makes that
+        request anyway. (#48)
+        """
+        aliases = getattr(self.coordinator, "blu_trv_names", None)
+        if isinstance(aliases, dict):
+            gateway = aliases.get(self._device_id)
+            if isinstance(gateway, dict):
+                alias = gateway.get(self._component_key)
+                if isinstance(alias, str) and alias.strip():
+                    return alias.strip()
+        return self.virtual_component_name(self._component_key) or self._fallback_name
 
     def _component(self) -> dict[str, Any]:
         value = self.device_status.get(self._component_key)

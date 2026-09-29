@@ -380,14 +380,7 @@ class ShellyCloudControl:
             found. Devices with no alias (never renamed in the app) are
             omitted silently.
         """
-        body = await self._post("/interface/device/list")
-        data = body.get("data")
-        if not isinstance(data, dict):
-            return {}
-        devices_block = data.get("devices")
-        if not isinstance(devices_block, dict):
-            return {}
-
+        devices_block = await self.get_device_records()
         wanted: set[str] | None = set(ids) if ids else None
         names: dict[str, str] = {}
         for did, record in devices_block.items():
@@ -399,6 +392,28 @@ class ShellyCloudControl:
             if isinstance(name, str) and name.strip():
                 names[did] = name.strip()
         return names
+
+    async def get_device_records(self) -> dict[str, Any]:
+        """Return the account's raw ``/interface/device/list`` device map.
+
+        Same single request as :meth:`get_device_names` and the same 1 req/s
+        budget — this is the unfiltered ``data.devices`` object, because the
+        listing carries more than aliases for whole devices. A BLU TRV behind
+        a gateway has a **child record** of its own in here, with the valve's
+        BLE address and the name the user typed in the app, and that record
+        belongs to no device id the poll knows about. Filtering to the
+        requested ids, as the alias lookup does, would throw it away. (#48)
+
+        Returns:
+            ``{record_id: record}``, empty if the response is not shaped as
+            expected. Never raises for a malformed payload.
+        """
+        body = await self._post("/interface/device/list")
+        data = body.get("data")
+        if not isinstance(data, dict):
+            return {}
+        devices_block = data.get("devices")
+        return devices_block if isinstance(devices_block, dict) else {}
 
     async def get_account_inventory(self) -> AccountInventory:
         """Fetch the alias-independent device inventory of the account.
