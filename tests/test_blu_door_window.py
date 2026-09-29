@@ -149,3 +149,45 @@ def test_multichannel_window_and_tilt():
         f"{DEVICE_ID}_ble_tilt_0",
         f"{DEVICE_ID}_ble_tilt_1",
     } & set(by_uid)) == 4
+
+
+# ── A second real device, two years later (#48) ─────────────────────────────
+
+
+def _gerok_snapshot(*, opened: bool) -> dict[str, Any]:
+    """A real SBDW-002C, captured either side of one open/close event.
+
+    Contributed by @gerok1984 on 2026-09-28 from a BLU Gateway Gen3 setup.
+    The device does **not** appear as a ``bthomedevice:*`` child of the
+    gateway the way his BLU TRVs and his BLU H&T do — Shelly Cloud serves it
+    as its own ``GBLE`` device, which is the shape this integration has
+    handled since #9.
+    """
+    return {
+        "window:0": {"open": opened},
+        "illuminance:0": {"lux": 21 if opened else 0},
+        "tilt:0": {"angle": 0},
+        "devicepower:0": {"battery": {"percent": 100}},
+        "packetid:0": {"id": 24 if opened else 23},
+        "fwversion:0": {"ver": "v1.0.99"},
+        "reporter": {"rssi": -67 if opened else -66},
+        "_dev_info": {"gen": "GBLE", "code": "SBDW-002C"},
+    }
+
+
+def test_the_second_reported_door_window_needs_no_new_code():
+    """#48 lists ``illuminance`` as missing; for a BLU device it is not.
+
+    This is the whole claim, checked against his payload rather than argued:
+    the open/close transition and the lux reading both come out of the
+    builders that already exist.
+    """
+    _s, _b, closed = _build(_gerok_snapshot(opened=False))
+    _s, _b, opened = _build(_gerok_snapshot(opened=True))
+
+    assert closed[f"{DEVICE_ID}_ble_window_0"].is_on is False
+    assert opened[f"{DEVICE_ID}_ble_window_0"].is_on is True
+    assert closed[f"{DEVICE_ID}_ble_illuminance_0"].native_value == 0
+    assert opened[f"{DEVICE_ID}_ble_illuminance_0"].native_value == 21
+    assert opened[f"{DEVICE_ID}_ble_tilt_0"].native_value == 0
+    assert opened[f"{DEVICE_ID}_ble_battery_percent"].native_value == 100
