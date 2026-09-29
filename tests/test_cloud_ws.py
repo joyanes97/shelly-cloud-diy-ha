@@ -624,6 +624,60 @@ def test_relay_error_codes_are_reduced_to_something_short(error, expected):
     assert cloud_ws._relay_error_code(error) == expected  # noqa: SLF001
 
 
+# ── What the device itself said ─────────────────────────────────────────────
+
+
+JRPC_REFUSAL = {
+    "error": "JRPC_ERROR",
+    "device_error": {
+        "code": -103,
+        "message": "Invalid argument 'value': not in options!",
+    },
+}
+
+
+def test_a_device_side_refusal_keeps_the_reason_the_device_gave():
+    """Measured shape, 2026-09-27, writing an unknown option to an enum.
+
+    The relay wraps the device's own JSON-RPC error. Reduced to its ``code``
+    alone it reads ``JRPC_ERROR``, which tells a user nothing and is the same
+    string for every rejected value on every component. The device already
+    said exactly what was wrong, so that sentence is what reaches the UI.
+    """
+    async def _scenario():
+        client = _client(
+            _FakeSession(lambda _: _FakeWebSocket(_answer({"error": JRPC_REFUSAL})))
+        )
+        await client.connect()
+        try:
+            with pytest.raises(ShellyCloudWsCommandError) as excinfo:
+                await client.send_jrpc_request(DEVICE_ID, "Enum.Set", {"id": 200})
+        finally:
+            await client.disconnect()
+        return excinfo.value
+
+    err = asyncio.run(_scenario())
+    assert err.code == "JRPC_ERROR", "the branchable code must not change"
+    assert "not in options" in str(err)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (JRPC_REFUSAL, "Invalid argument 'value': not in options!"),
+        ({"device_error": {"code": -105}}, None),
+        ({"device_error": {"message": "   "}}, None),
+        ({"device_error": "not an object"}, None),
+        ("WRONG_ID", None),
+        ({"message": "WRONG_ID"}, None),
+        ({"device_error": {"message": "y" * 300}}, "y" * 160),
+    ],
+)
+def test_only_a_real_device_message_is_passed_on(error, expected):
+    """Remote text in a user-facing message: only this field, and capped."""
+    assert cloud_ws._relay_error_detail(error) == expected  # noqa: SLF001
+
+
 # ── The device id the relay routes on ───────────────────────────────────────
 
 

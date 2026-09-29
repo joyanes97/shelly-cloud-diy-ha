@@ -206,3 +206,61 @@ def test_a_valve_without_an_alias_keeps_its_positional_name() -> None:
         "Salón 2",
     ]
     assert _valve_names(None) == ["BLU TRV", "BLU TRV 2"]
+
+
+# ── The seam between the two: one request, two results ────────────────
+
+
+def test_one_alias_request_fills_both_the_device_names_and_the_valve_aliases(
+    monkeypatch,
+) -> None:
+    """Drive the real refresh, because the wiring is where this can rot.
+
+    The resolver and the entity are tested above; what this covers is that
+    the coordinator actually asks for the **raw** records (the child records
+    are not in the requested ids, so an id-filtered lookup would drop them)
+    and files both results.
+    """
+    import asyncio
+    from types import SimpleNamespace
+
+    from custom_components.shelly_cloud_diy import coordinator as coordinator_module
+    from custom_components.shelly_cloud_diy.coordinator import ShellyCloudCoordinator
+
+    monkeypatch.setattr(coordinator_module, "_V2_NAME_LOOKUP_GAP_S", 0)
+    monkeypatch.setattr(
+        coordinator_module.dr,
+        "async_get",
+        lambda hass: SimpleNamespace(async_get_device=lambda identifiers: None),
+    )
+
+    calls: list[str] = []
+
+    class _Api:
+        async def get_device_records(self) -> dict[str, Any]:
+            calls.append("records")
+            return DEVICE_LIST_RECORDS
+
+        async def get_device_names(self, ids=None):  # pragma: no cover
+            raise AssertionError("the id-filtered lookup drops the child records")
+
+    coordinator = object.__new__(ShellyCloudCoordinator)
+    coordinator._api = _Api()
+    coordinator.devices = {GATEWAY_ID: {"status": _status(), "online": True}}
+    coordinator.data = coordinator.devices
+    coordinator.device_names = {}
+    coordinator.blu_trv_names = {}
+    coordinator._names_attempted = set()
+    coordinator._name_lookup_in_flight = True
+    coordinator.hass = SimpleNamespace()
+    coordinator.async_update_listeners = lambda: None
+
+    asyncio.run(coordinator._refresh_device_names([GATEWAY_ID]))
+
+    assert calls == ["records"], "one request, not one per result"
+    assert coordinator.device_names == {GATEWAY_ID: "Gateway Salón"}
+    assert coordinator.devices[GATEWAY_ID]["name"] == "Gateway Salón"
+    assert coordinator.blu_trv_names == {
+        GATEWAY_ID: {"blutrv:200": "Salón 1", "blutrv:201": "Salón 2"}
+    }
+    assert coordinator._name_lookup_in_flight is False

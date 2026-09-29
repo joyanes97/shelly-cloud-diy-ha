@@ -34,6 +34,18 @@ which has no release pages.
 - Devices whose only writable component is a number, text, enum or script are
   now included in the ownership probe. Before this they were never asked about,
   so they could never have gained a control entity whatever the relay said.
+- **Fix: BLU TRV valves now carry the name you gave them in the Shelly app.**
+  They shipped as "BLU TRV" / "BLU TRV 2" in v0.13.0 because no payload
+  appeared to carry the name. It is in the account's alias listing, where each
+  valve has a child record of its own with its Bluetooth address and its name —
+  the same listing this integration already requests for device names, so the
+  valve names cost no extra request. Found and confirmed on real hardware by
+  [@gerok1984](https://github.com/gerok1984), who also measured the two roads
+  that do *not* work, which is why neither is attempted (#48).
+- A command the device itself refuses now says why. Writing a value a component
+  does not accept used to surface as `JRPC_ERROR`, which is the same string for
+  every rejected value; the device's own sentence — "Invalid argument 'value':
+  not in options!" — now reaches the UI with it.
 
 ## v0.13.0 — 2026-09-27
 

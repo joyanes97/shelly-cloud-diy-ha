@@ -171,6 +171,11 @@ Off by default. What it does, and what it costs:
   the cloud and reading the device's own value back locally, with the same
   call and an invalid value as the negative control. Each one is a control
   entity created *beside* the component's existing read-only sensor.
+- The valves' names do not come from the relay at all: each one has a child
+  record in the account's alias listing carrying its Bluetooth address and the
+  name the user typed, and that listing is already requested for device names
+  (v0.14.0). The valve's own v2 config and its linked `bthomedevice:<id>` were
+  both measured to answer `name: null`, so neither is asked.
 - The same relay carries the **setpoint of a Shelly BLU TRV** (v0.13.0). The
   valve is a Bluetooth device with no cloud identity, so the call goes to its
   BLU Gateway Gen3 and wraps the valve's own RPC: `BluTrv.Call` carrying

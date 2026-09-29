@@ -123,6 +123,10 @@ _CLOSE_CODE_TOKEN_BROKEN = 4401
 # trusted: it arrives from the wire.
 _MAX_ERROR_CODE_LEN = 64
 
+# The device's own refusal message is a sentence rather than a code, so it
+# gets more room than a code — still capped, because it comes off the wire.
+_MAX_ERROR_DETAIL_LEN = 160
+
 # Wire fact, measured 2026-09-05 on a live account: the relay addresses a
 # device by its MAC **as a decimal integer**, not by the hex string the HTTP
 # inventory is keyed on. The two forms are not interchangeable and the relay
@@ -258,6 +262,31 @@ def _relay_error_code(error: Any) -> str:
             if isinstance(value, int):
                 return str(value)
     return "UNKNOWN"
+
+
+def _relay_error_detail(error: Any) -> str | None:
+    """Return the device's own explanation of a refusal, or None.
+
+    Measured 2026-09-27 while writing an unknown option to a virtual enum: the
+    relay wraps the device's JSON-RPC error as ``{"error": "JRPC_ERROR",
+    "device_error": {"code": -103, "message": "Invalid argument 'value': not
+    in options!"}}``. The outer code is the same for every device-side
+    refusal; the inner message is the only part that tells a user what to
+    change, so it is the one thing passed on.
+
+    It is remote text on its way into a user-facing error, so exactly one
+    field is read and the result is capped. Nothing else from the wire is
+    forwarded — ``_relay_error_code`` remains what callers branch on.
+    """
+    if not isinstance(error, dict):
+        return None
+    device_error = error.get("device_error")
+    if not isinstance(device_error, dict):
+        return None
+    message = device_error.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return None
+    return message.strip()[:_MAX_ERROR_DETAIL_LEN]
 
 
 class ShellyCloudWebSocket:
@@ -680,8 +709,11 @@ class ShellyCloudWebSocket:
                 raise ShellyCloudWsAuthError(
                     f"Cloud relay rejected the session for {method} on {device_id}"
                 )
+            detail = _relay_error_detail(error)
             raise ShellyCloudWsCommandError(
-                f"Cloud relay refused {method} on {device_id}: {code}", code=code
+                f"Cloud relay refused {method} on {device_id}: {code}"
+                + (f" ({detail})" if detail else ""),
+                code=code,
             )
 
         _LOGGER.debug(
