@@ -9,6 +9,33 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## v0.15.0 — 2026-10-03
+
+- **Fix: Home Assistant no longer demands a new Authorization cloud key over a
+  single unexplained refusal.** Shelly answers HTTP 401 in at least three
+  different situations and names the credential in only one of them. Every
+  401 that was not the known rate-limit body was treated as "your key is
+  invalid" — immediately, on the first occurrence — which stops the
+  integration until somebody pastes a key by hand, even when the next poll
+  would have worked. Now a refusal that names the key still goes straight to
+  re-authentication, and an unexplained one is an ordinary failed poll that
+  only escalates after it has persisted across four attempts **and** five
+  minutes. One successful poll clears it. Reported by
+  [@Frido1980](https://github.com/Frido1980) (#50), with a second case on my
+  own account; neither had a password change behind it.
+- **New: the re-authentication dialog can correct the server URI as well.**
+  Shelly can move an account to a different cloud server, which leaves the key
+  working and the stored URI wrong — the one situation this dialog exists for
+  that it could not previously repair, because it silently reused the URI. The
+  field is prefilled, so for everyone else nothing changes.
+- **New: diagnostics report the last authentication refusal** — HTTP status,
+  whether Shelly actually named the credential, how many consecutive refusals,
+  and a short excerpt of the response. The excerpt is capped and the key is
+  redacted out of it. "Why did it ask me to re-authenticate" was unanswerable
+  before, including for me.
+- The re-authentication dialog no longer claims the key was rejected when the
+  integration cannot tell that it was.
+
 ## v0.14.1 — 2026-10-03
 
 - **Fix: the setup and re-authentication dialogs pointed at a menu that no

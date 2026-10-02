@@ -213,6 +213,33 @@ def test_time_alone_does_not_escalate() -> None:
     ), "two attempts are not a streak, however far apart they are"
 
 
+def test_the_poll_clears_the_streak_when_it_succeeds() -> None:
+    """Static, and deliberately so — the same reason test_coordinator_init is.
+
+    Removing the reset call from the success path is invisible to every
+    behavioural test here: they drive the decision function directly, because
+    constructing a real poll drags in the whole repair/health/fault chain.
+    The failure mode is positional (a call that is not made), and that is
+    what a read of the syntax tree catches. Found by sabotage: dropping the
+    call broke nothing.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    source = inspect.getsource(ShellyCloudCoordinator._async_update_data)
+    tree = ast.parse(textwrap.dedent(source))
+    called = {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert "_note_auth_ok" in called, (
+        "a successful poll has to clear the ambiguous-refusal streak, or a "
+        "flapping cloud eventually adds up to a re-authentication"
+    )
+
+
 def test_one_good_poll_clears_the_streak() -> None:
     """Exactly the case this exists for: the cloud had a bad minute."""
     coordinator = _coordinator()
