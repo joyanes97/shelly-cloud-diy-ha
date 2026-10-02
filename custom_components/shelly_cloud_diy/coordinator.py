@@ -92,6 +92,16 @@ from .repair_issues import (
     rate_limit_verdict,
 )
 
+# When an unexplained 401/403 stops being "the cloud is having a minute" and
+# becomes "ask the user for a new key". BOTH gates must pass: a poll every 5 s
+# reaches a high count in no time, and a slow poll reaches a long elapsed time
+# on two attempts — neither alone is a sustained condition. Five minutes is
+# chosen against the one thing measured here: a rate-limited account recovers
+# in about five minutes, and that is the longest Shelly-side wobble this
+# integration has ever observed. Shelly *naming* the key skips all of it. (#50)
+AMBIGUOUS_AUTH_MIN_STREAK = 4
+AMBIGUOUS_AUTH_MIN_SECONDS = 300.0
+
 # Gap between the v1 poll completing and the v2 name lookup firing, so we
 # stay under the 1 req/s per-account rate limit that both endpoints share.
 _V2_NAME_LOOKUP_GAP_S = 1.2
@@ -503,6 +513,12 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # new devices appear; we never re-fetch already-known names (they
         # change rarely and cost rate-limit budget).
         self.device_names: dict[str, str] = {}
+        # What the last authentication refusal said, for diagnostics, and the
+        # streak that decides whether an unexplained one is worth a repair.
+        # A refusal nobody can explain afterwards is the complaint in #50.
+        self.last_auth_failure: dict[str, Any] | None = None
+        self._ambiguous_auth_streak = 0
+        self._ambiguous_auth_since: float | None = None
         # Gateway device id -> ``blutrv:<id>`` -> the valve's Shelly-App
         # alias. Filled from the same alias listing the device names come
         # from, so it costs no request of its own. (#48)
@@ -999,9 +1015,11 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         try:
             data = await self._api.get_all_status()
         except ShellyCloudAuthError as err:
-            # Surfaces as "repair me" in HA → user must re-enter auth_key
+            # Not every 401 is a dead key — see ``_auth_failure_outcome``. A
+            # confirmed rejection surfaces as "repair me" at once; an
+            # unexplained refusal is a failed poll until it persists. (#50)
             self._note_poll_not_rate_limited()
-            raise ConfigEntryAuthFailed(str(err)) from err
+            raise self._auth_failure_outcome(err, time.monotonic()) from err
         except ShellyCloudRateLimitError as err:
             # Shelly signals its 1 req/s limit as HTTP 401 with ``max_req``
             # in the body — indistinguishable from a rejected key by status
@@ -1145,6 +1163,7 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # The poll succeeded, so whatever the previous outcome was, it was
         # not a sustained rate limit.
         self._note_poll_not_rate_limited()
+        self._note_auth_ok()
         self._evaluate_missing_devices(set(new_devices))
         # Reads ``self.devices``, so it must stay below the assignment above.
         self._evaluate_relay_faults(now)
@@ -1153,6 +1172,63 @@ class ShellyCloudCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return new_devices
 
     # ── Repair-issue evaluation ───────────────────────────────────────
+
+    def _auth_failure_outcome(
+        self, err: ShellyCloudAuthError, now: float
+    ) -> ConfigEntryAuthFailed | UpdateFailed:
+        """Decide what one authentication refusal means, and record it.
+
+        Returns the exception the poll should raise rather than raising it,
+        so the rule can be read and tested without a coordinator loop around
+        it. ``ConfigEntryAuthFailed`` stops the integration and demands a new
+        key from the user; ``UpdateFailed`` is an ordinary failed poll that
+        the next one can undo. (#50)
+        """
+        confirmed = getattr(err, "confirmed", True)
+        if confirmed:
+            self._ambiguous_auth_streak = 0
+            self._ambiguous_auth_since = None
+        else:
+            if self._ambiguous_auth_since is None:
+                self._ambiguous_auth_since = now
+            self._ambiguous_auth_streak += 1
+
+        self.last_auth_failure = {
+            "status": getattr(err, "status", None),
+            "confirmed": confirmed,
+            "detail": getattr(err, "detail", None),
+            "consecutive": 0 if confirmed else self._ambiguous_auth_streak,
+        }
+
+        if confirmed:
+            _LOGGER.warning("Shelly Cloud named the Authorization cloud key as invalid")
+            return ConfigEntryAuthFailed(str(err))
+
+        sustained = (
+            self._ambiguous_auth_streak >= AMBIGUOUS_AUTH_MIN_STREAK
+            and (now - self._ambiguous_auth_since) >= AMBIGUOUS_AUTH_MIN_SECONDS
+        )
+        if not sustained:
+            _LOGGER.debug(
+                "Shelly Cloud refused the poll without naming a reason "
+                "(%s), attempt %d — treating it as a failed poll",
+                getattr(err, "status", "?"),
+                self._ambiguous_auth_streak,
+            )
+            return UpdateFailed(f"Shelly Cloud poll failed: {err}")
+
+        _LOGGER.warning(
+            "Shelly Cloud has refused every poll for %.0f s over %d attempts "
+            "without naming a reason; asking for the credentials to be checked",
+            now - self._ambiguous_auth_since,
+            self._ambiguous_auth_streak,
+        )
+        return ConfigEntryAuthFailed(str(err))
+
+    def _note_auth_ok(self) -> None:
+        """A poll got through: whatever the refusals were, they are over."""
+        self._ambiguous_auth_streak = 0
+        self._ambiguous_auth_since = None
 
     def _note_rate_limited(self) -> None:
         """Extend the consecutive rate-limit streak and re-evaluate."""

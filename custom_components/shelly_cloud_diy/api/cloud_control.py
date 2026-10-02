@@ -87,6 +87,10 @@ _DEFAULT_TIMEOUT_S = 10
 # clears a single trip in testing (1.2 s was borderline). (#6)
 _RATE_LIMIT_BACKOFF_S = 1.5
 
+# How much of a refusal body is kept for diagnostics. Enough for Shelly's
+# ``errors`` object, far short of a page of HTML from a proxy. (#50)
+_MAX_REFUSAL_DETAIL_LEN = 256
+
 # Virtual-component status/config keys look like ``number:200`` / ``boolean:201``.
 # Only these are kept from the v2 ``settings`` block; switch/sys/etc. are
 # dropped so the cached config stays small. (#9)
@@ -115,7 +119,34 @@ class ShellyCloudError(Exception):
 
 
 class ShellyCloudAuthError(ShellyCloudError):
-    """The auth_key or server URI was rejected by Shelly Cloud."""
+    """Shelly Cloud refused the request on authentication grounds.
+
+    ``confirmed`` is the part that matters, and it is deliberately not the
+    default. Shelly answers **HTTP 401 for at least three different
+    situations** — a rejected key, its own 1 req/s rate limit, and refusals
+    it does not explain — so the status code alone proves nothing about the
+    credential. Only ``confirmed=True`` means Shelly actually named the key
+    (``invalid_auth_key``); anything else is "refused, reason unknown", and
+    the caller must not turn that into "your key is dead" on its own. (#50)
+
+    ``status`` and ``detail`` carry what the refusal said, for diagnostics.
+    ``detail`` is capped and redacted — it is remote text heading for a file
+    the user will attach to a bug report.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        confirmed: bool = False,
+        status: int | None = None,
+        detail: str | None = None,
+    ) -> None:
+        """Store what was actually known about the refusal."""
+        super().__init__(message)
+        self.confirmed = confirmed
+        self.status = status
+        self.detail = detail
 
 
 class ShellyCloudRateLimitError(ShellyCloudError):
@@ -177,6 +208,31 @@ class ShellyCloudControl:
     # ── Core request plumbing ───────────────────────────────────────────
 
     @staticmethod
+    def _names_the_key(text: str) -> bool:
+        """True if Shelly's body blames the credential itself.
+
+        The only evidence this client accepts for "the stored key is
+        invalid". Shelly spells it ``invalid_auth_key`` in the ``errors``
+        object; everything else that arrives with a 401 is unexplained. (#50)
+        """
+        return "invalid_auth_key" in text.lower()
+
+    def _refusal_detail(self, text: str) -> str:
+        """A short, key-free excerpt of a refusal, for diagnostics. (#50)
+
+        Two things are done to it and both are necessary. The key is
+        redacted because a server is free to echo what it was sent, and this
+        string ends up in a diagnostics download the user attaches to a
+        public issue. The result is capped because the rest of a refusal
+        body is of no diagnostic value and an uncapped one is a way to put
+        arbitrary remote text into a file.
+        """
+        excerpt = " ".join(text.split())
+        if self._auth_key and self._auth_key in excerpt:
+            excerpt = excerpt.replace(self._auth_key, "<redacted>")
+        return excerpt[:_MAX_REFUSAL_DETAIL_LEN]
+
+    @staticmethod
     def _is_rate_limit_body(text: str) -> bool:
         """True if a response body is Shelly's rate-limit signal.
 
@@ -224,8 +280,15 @@ class ShellyCloudControl:
                             raise ShellyCloudRateLimitError(
                                 "Rate limit exceeded (1 req/s)"
                             )
+                        confirmed = self._names_the_key(body_text)
                         raise ShellyCloudAuthError(
-                            f"Shelly Cloud rejected auth_key ({response.status})"
+                            f"Shelly Cloud refused the request "
+                            f"({response.status}"
+                            + (", auth_key named" if confirmed else ", reason unstated")
+                            + ")",
+                            confirmed=confirmed,
+                            status=response.status,
+                            detail=self._refusal_detail(body_text),
                         )
                     if response.status == 429:
                         if attempt == 0:
@@ -254,8 +317,13 @@ class ShellyCloudControl:
             # in docs/AUTH_KEY.md returns this line too, and a reader should
             # not have to wonder about it. The raised message carries
             # ``errors`` (Shelly's own wording), never the credential.
-            if errors and "invalid_auth_key" in str(errors).lower():
-                raise ShellyCloudAuthError(f"Auth rejected: {errors}")
+            if errors and self._names_the_key(str(errors)):
+                raise ShellyCloudAuthError(
+                    f"Auth rejected: {errors}",
+                    confirmed=True,
+                    status=200,
+                    detail=self._refusal_detail(str(errors)),
+                )
             raise ShellyCloudError(f"Shelly Cloud API error on {path}: {errors or data}")
 
         return data
@@ -296,8 +364,15 @@ class ShellyCloudControl:
                             raise ShellyCloudRateLimitError(
                                 "Rate limit exceeded (1 req/s)"
                             )
+                        confirmed = self._names_the_key(body_text)
                         raise ShellyCloudAuthError(
-                            f"Shelly Cloud rejected auth_key ({response.status})"
+                            f"Shelly Cloud refused the request "
+                            f"({response.status}"
+                            + (", auth_key named" if confirmed else ", reason unstated")
+                            + ")",
+                            confirmed=confirmed,
+                            status=response.status,
+                            detail=self._refusal_detail(body_text),
                         )
                     if response.status == 429:
                         if attempt == 0:
