@@ -92,6 +92,20 @@ STRUCTURAL_STATUS_KEYS = frozenset(
 )
 
 
+def _auth_failure_diagnostics(coordinator: Any) -> dict[str, Any] | None:
+    """What the last authentication refusal said, or None if there was none.
+
+    The whole point of #50 was that a user could not tell *why* the
+    integration had asked for a new key — and neither could I. This is the
+    answer to that question in a bug report: the HTTP status, whether Shelly
+    actually named the credential, how many consecutive refusals there have
+    been, and a short excerpt of the body. The excerpt is redacted and capped
+    where it is produced, in the API client. (#50)
+    """
+    failure = getattr(coordinator, "last_auth_failure", None)
+    return failure if isinstance(failure, dict) else None
+
+
 def _cloud_control_diagnostics(
     options: dict[str, Any], coordinator: Any | None
 ) -> dict[str, Any]:
@@ -243,6 +257,7 @@ def _config_diagnostics(
             "other_option_keys": sorted(set(options) - KNOWN_OPTION_KEYS),
         },
         "cloud_control": _cloud_control_diagnostics(options, coordinator),
+        "last_auth_failure": _auth_failure_diagnostics(coordinator),
         "devices": devices,
     }
 

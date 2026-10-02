@@ -238,3 +238,135 @@ def test_what_the_refusal_said_is_kept_for_the_bug_report() -> None:
         "detail": "nope",
         "consecutive": 1,
     }
+
+
+# ── 3. The dialog the user lands in ───────────────────────────────────
+
+
+FAKE_NEW_KEY = "FAKE-REPLACEMENT-KEY-not-a-credential"  # noqa: S105
+OTHER_SERVER = "https://shelly-77-eu.shelly.cloud"
+
+
+class _FlowEntry:
+    def __init__(self) -> None:
+        self.entry_id = "e1"
+        self.data = {"auth_key": "NOTAREALKEY-shouldneverappear",
+                     "server_uri": SERVER}
+        self.options: dict[str, Any] = {}
+
+
+def _flow(entry: _FlowEntry, monkeypatch, *, accepts: bool = True):
+    from custom_components.shelly_cloud_diy import config_flow
+
+    class _Api:
+        def __init__(self, session, server_uri, auth_key) -> None:
+            self.server_uri = server_uri
+            self.auth_key = auth_key
+            seen.append((server_uri, auth_key))
+
+        async def validate(self) -> int:
+            if not accepts:
+                raise ShellyCloudAuthError("no", confirmed=True, status=401)
+            return 3
+
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(config_flow, "ShellyCloudControl", _Api)
+    monkeypatch.setattr(config_flow, "async_get_clientsession", lambda hass: None)
+
+    reloads: list[str] = []
+
+    def _update(config_entry, **kwargs):
+        if "data" in kwargs:
+            config_entry.data = dict(kwargs["data"])
+
+    async def _reload(entry_id):
+        reloads.append(entry_id)
+
+    flow = config_flow.ShellyCloudDiyConfigFlow()
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_get_entry=lambda entry_id: entry,
+            async_update_entry=_update,
+            async_reload=_reload,
+        )
+    )
+    flow.context = {"entry_id": entry.entry_id}
+    return flow, seen, reloads
+
+
+def test_the_reauth_dialog_also_offers_the_server_uri(monkeypatch) -> None:
+    """Shelly documents that an account can be moved between servers.
+
+    The dialog asked only for the key and silently reused the stored URI, so
+    a migrated account could not be repaired through it at all. (#50)
+    """
+    entry = _FlowEntry()
+    flow, _seen, _reloads = _flow(entry, monkeypatch)
+
+    form = asyncio.run(flow.async_step_reauth_confirm())
+
+    fields = {str(key) for key in form["data_schema"].schema}
+    assert fields == {"auth_key", "server_uri"}
+
+
+def test_a_changed_server_uri_is_validated_and_stored(monkeypatch) -> None:
+    entry = _FlowEntry()
+    flow, seen, reloads = _flow(entry, monkeypatch)
+
+    result = asyncio.run(
+        flow.async_step_reauth_confirm(
+            {"auth_key": FAKE_NEW_KEY, "server_uri": OTHER_SERVER}
+        )
+    )
+
+    assert result["reason"] == "reauth_successful"
+    assert seen == [(OTHER_SERVER, FAKE_NEW_KEY)], "the pair is checked together"
+    assert entry.data["server_uri"] == OTHER_SERVER
+    assert entry.data["auth_key"] == FAKE_NEW_KEY
+    assert reloads == ["e1"]
+
+
+def test_an_empty_server_uri_falls_back_to_the_stored_one(monkeypatch) -> None:
+    """Most users only need to paste a key; the URI must not become a chore."""
+    entry = _FlowEntry()
+    flow, seen, _reloads = _flow(entry, monkeypatch)
+
+    asyncio.run(flow.async_step_reauth_confirm({"auth_key": FAKE_NEW_KEY}))
+
+    assert seen == [(SERVER, FAKE_NEW_KEY)]
+
+
+def test_a_rejected_pair_leaves_the_entry_untouched(monkeypatch) -> None:
+    entry = _FlowEntry()
+    before = dict(entry.data)
+    flow, _seen, reloads = _flow(entry, monkeypatch, accepts=False)
+
+    form = asyncio.run(
+        flow.async_step_reauth_confirm(
+            {"auth_key": FAKE_NEW_KEY, "server_uri": OTHER_SERVER}
+        )
+    )
+
+    assert form["errors"] == {"base": "invalid_auth"}
+    assert entry.data == before
+    assert reloads == []
+
+
+# ── 4. What a bug report will contain ─────────────────────────────────
+
+
+def test_diagnostics_report_the_last_refusal_without_the_key() -> None:
+    from custom_components.shelly_cloud_diy import diagnostics
+
+    coordinator = _coordinator()
+    coordinator.last_auth_failure = {
+        "status": 401,
+        "confirmed": False,
+        "detail": '{"isok":false,"errors":{}}',
+        "consecutive": 2,
+    }
+
+    block = diagnostics._auth_failure_diagnostics(coordinator)
+
+    assert block == coordinator.last_auth_failure
+    assert diagnostics._auth_failure_diagnostics(SimpleNamespace()) is None

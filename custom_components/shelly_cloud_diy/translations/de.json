@@ -31,9 +31,14 @@
       },
       "reauth_confirm": {
         "title": "Shelly Cloud DIY erneut anmelden",
-        "description": "Die Shelly Cloud hat den gespeicherten Authorization cloud key abgelehnt. Füge einen frischen Key aus der Shelly-Smart-Control-App ein (Einstellungen → Access and permissions → Get key), um den Zugriff wiederherzustellen.",
+        "description": "Die Shelly Cloud weist die Anfragen dieser Integration ab. Fast immer muss der Authorization cloud key erneuert werden: Hol dir einen frischen in der Shelly-Smart-Control-App (Einstellungen → Access and permissions → Get key).\n\nShelly kann ein Konto außerdem auf einen anderen Cloud-Server verschieben — dann ist der Key in Ordnung und die Server-URI falsch. Sie ist mit dem gespeicherten Wert vorbelegt; lass sie unverändert, solange die Shelly-App keinen anderen Hostnamen zeigt.",
         "data": {
-          "auth_key": "Authorization cloud key"
+          "auth_key": "Authorization cloud key",
+          "server_uri": "Server-URI"
+        },
+        "data_description": {
+          "auth_key": "Der lange String, den die Shelly-Smart-Control-App unter „Access and permissions“ anzeigt.",
+          "server_uri": "Nur ändern, wenn Shelly dein Konto verschoben hat; der gespeicherte Wert ist vorbelegt."
         }
       },
       "devices_bulk": {

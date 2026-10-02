@@ -524,22 +524,31 @@ class ShellyCloudDiyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Re-ask for the auth_key only; server URI stays as-is."""
+        """Re-ask for the key, and for the server URI alongside it.
+
+        The URI used to be reused silently, which made one documented
+        situation unrepairable through this dialog: Shelly can move an
+        account to a different cloud server, and the stored URI is then
+        wrong while the key is fine. It is prefilled with what is stored,
+        because for everyone else this is still a paste-one-value dialog —
+        and the two are validated together, since only the pair can be
+        tested at all. (#50)
+        """
         errors: dict[str, str] = {}
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if entry is None:
             return self.async_abort(reason="reauth_entry_missing")
 
+        stored_uri = entry.data[CONF_SERVER_URI]
         if user_input is not None:
             auth_key = user_input[CONF_AUTH_KEY].strip()
+            server_uri = (user_input.get(CONF_SERVER_URI) or "").strip() or stored_uri
             if not auth_key:
                 errors[CONF_AUTH_KEY] = "required"
             else:
                 session = async_get_clientsession(self.hass)
                 try:
-                    api = ShellyCloudControl(
-                        session, entry.data[CONF_SERVER_URI], auth_key
-                    )
+                    api = ShellyCloudControl(session, server_uri, auth_key)
                     await api.validate()
                 except ShellyCloudAuthError:
                     errors["base"] = "invalid_auth"
@@ -551,14 +560,23 @@ class ShellyCloudDiyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     self.hass.config_entries.async_update_entry(
                         entry,
-                        data={**entry.data, CONF_AUTH_KEY: auth_key},
+                        data={
+                            **entry.data,
+                            CONF_AUTH_KEY: auth_key,
+                            CONF_SERVER_URI: server_uri,
+                        },
                     )
                     await self.hass.config_entries.async_reload(entry.entry_id)
                     return self.async_abort(reason="reauth_successful")
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_AUTH_KEY): str}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_AUTH_KEY): str,
+                    vol.Optional(CONF_SERVER_URI, default=stored_uri): str,
+                }
+            ),
             errors=errors,
         )
 

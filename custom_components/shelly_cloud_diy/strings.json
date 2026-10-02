@@ -31,9 +31,14 @@
       },
       "reauth_confirm": {
         "title": "Re-authenticate Shelly Cloud DIY",
-        "description": "The Shelly Cloud rejected the stored Authorization cloud key. Paste a fresh key from the Shelly Smart Control app (Settings → Access and permissions → Get key) to restore access.",
+        "description": "Shelly Cloud is refusing this integration's requests. In almost every case the Authorization cloud key needs replacing: get a fresh one from the Shelly Smart Control app (Settings → Access and permissions → Get key).\n\nShelly can also move an account to a different cloud server, which leaves the key working and the server URI wrong. It is prefilled with the stored one — leave it untouched unless the Shelly app now shows a different hostname.",
         "data": {
-          "auth_key": "Authorization cloud key"
+          "auth_key": "Authorization cloud key",
+          "server_uri": "Server URI"
+        },
+        "data_description": {
+          "auth_key": "The long string the Shelly Smart Control app shows under Access and permissions.",
+          "server_uri": "Only change this if Shelly moved your account; the stored value is prefilled."
         }
       },
       "devices_bulk": {
