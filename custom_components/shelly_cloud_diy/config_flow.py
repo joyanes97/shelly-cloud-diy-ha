@@ -3,7 +3,7 @@
 User setup is a two-step flow:
 
 1. **auth** — paste ``auth_key`` + ``server URI`` from the Shelly App
-   (*User settings → Authorization cloud key*). We validate both by
+   (*Settings → Access and permissions → Get key*). We validate both by
    hitting ``/device/all_status`` once and cache the snapshot so the
    second step does not need to re-poll.
 2. **devices** — offer either "create entities for every device" (one

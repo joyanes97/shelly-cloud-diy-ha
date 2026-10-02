@@ -376,8 +376,8 @@ Revision ist die wichtige):**
   Standard-Config-Entry-Storage, Klartext auf Disk unter
   `.storage/core.config_entries`). Der Key gibt weitreichende Kontrolle
   über deine Geräte — behandle ihn wie ein Passwort.
-- Er wird in der Shelly-App unter **Benutzereinstellungen →
-  Authorization cloud key** angezeigt. Ein Passwort-Wechsel bei Shelly
+- Er wird in der Shelly-Smart-Control-App unter **Einstellungen → Access and
+  permissions → Get key** angezeigt. Ein Passwort-Wechsel bei Shelly
   invalidiert ihn serverseitig — das ist die vorgesehene
   Rotations-Methode.
 - Meilenstein 1 speichert weder Mail noch Passwort.

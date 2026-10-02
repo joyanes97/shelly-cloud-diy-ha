@@ -18,8 +18,9 @@ weiter unten, und es gibt welche.
 
 ## Was der Schlüssel ist und was er kann
 
-Der Auth-Key stammt aus der Shelly-App unter *Benutzereinstellungen →
-Autorisierungs-Cloud-Key*. Er ist ein **Zugang zum gesamten Konto**: alles, was
+Der Auth-Key stammt aus der Shelly-Smart-Control-App unter *Einstellungen →
+Access and permissions → Get key* (je nach App-Version liegt der Abschnitt
+unter *Home* oder unter *Benutzereinstellungen*). Er ist ein **Zugang zum gesamten Konto**: alles, was
 du in der App kannst, kann auch der Schlüssel — jedes Gerät des Kontos lesen und
 jedes Gerät des Kontos schalten. Es gibt keine Nur-Lesen-Variante und keine
 Beschränkung auf einzelne Geräte. Das ist Shellys Entwurf, keine Entscheidung

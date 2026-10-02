@@ -364,8 +364,8 @@ is real, which is why this project exists.
 - The `auth_key` is stored in `entry.data` (Home Assistant standard
   config-entry storage, plaintext at rest in `.storage/core.config_entries`).
   The key grants broad device control — treat it like a password.
-- It is displayed by the Shelly App under **User settings → Authorization
-  cloud key**. Changing your Shelly password invalidates it
+- It is displayed by the Shelly Smart Control app under **Settings → Access and
+  permissions → Get key**. Changing your Shelly password invalidates it
   server-side, which is the intended rotation mechanism.
 - Milestone 1 does not store email or password.
 - Cloud control (Milestone 2) sends `sha1(password)` to

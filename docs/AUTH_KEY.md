@@ -17,8 +17,9 @@ party. The uncomfortable parts are further down, and there are some.
 
 ## What the key is, and what it can do
 
-The auth key comes from the Shelly App under *User settings → Authorization
-cloud key*. It is a **full-account credential**: anything you can do in the
+The auth key comes from the Shelly Smart Control app under *Settings → Access
+and permissions → Get key* (depending on the app version that section sits
+under *Home* or under *User settings*). It is a **full-account credential**: anything you can do in the
 Shelly App, the key can do — read every device on the account and control every
 device on the account. There is no read-only variant and no per-device scoping.
 That is Shelly's design, not a choice this integration makes.

@@ -421,9 +421,12 @@ frisches Cloud-Polling.
 Die Cloud Control API ist Self-Service. Du musst Shelly nicht kontaktieren, kein
 Formular ausfüllen und nicht auf eine Freigabe warten.
 
-1. **Shelly-App** öffnen.
-2. Zu **Benutzereinstellungen → Authorization cloud key** navigieren.
-3. Auf **GET KEY** tippen.
+1. **Shelly-Smart-Control-App** öffnen.
+2. Zu **Einstellungen → Access and permissions** navigieren. Je nach
+   App-Version liegt der Abschnitt unter *Home* oder unter
+   *Benutzereinstellungen*; verlässlich ist der Name des Abschnitts. Die App
+   zeigt ihn je nach Sprache auch übersetzt.
+3. Auf **Get key** tippen.
 4. Du bekommst zwei Werte: einen **`auth_key`** (langer undurchsichtiger String)
    und eine **Server-URI** (z. B. `shelly-42-eu.shelly.cloud`).
 5. Beide Werte trägst du im Home-Assistant-Konfigurations-Dialog während des

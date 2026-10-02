@@ -11,7 +11,7 @@ Thin async wrapper around the documented Cloud Control API endpoints:
   (settings, names); auth_key goes in the JSON body, NOT as Bearer header.
 
 All v1 calls authenticate via the form parameter ``auth_key`` (obtained from
-the Shelly App under *User settings → Authorization cloud key*). The v2 call
+the Shelly Smart Control app under *Settings → Access and permissions*). The v2 call
 takes the same ``auth_key`` but as a JSON body field. The per-account server
 URI is passed into the client at construction time (also shown on the same
 screen in the app).

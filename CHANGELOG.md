@@ -9,6 +9,24 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## v0.14.1 — 2026-10-03
+
+- **Fix: the setup and re-authentication dialogs pointed at a menu that no
+  longer exists.** The Authorization cloud key moved in the Shelly Smart
+  Control app; it now lives under *Settings → Access and permissions → Get
+  key*. Every place that named the old path — both dialogs, both READMEs and
+  the key documentation — is corrected. Reported by
+  [@Frido1980](https://github.com/Frido1980) (#49). The app puts that section
+  under *Home* in some versions and under *User settings* in others, so the
+  dialogs name the section rather than the menu above it.
+- **Fix: `aiohttp` is no longer listed as a requirement.** Home Assistant
+  ships it itself, and as of 2026-10-01 hassfest rejects a custom integration
+  that lists it — the nightly validation had been failing since. Nothing
+  changes for an installed integration; the import was always satisfied by
+  Home Assistant. A test now guards the whole class, so the next such rule
+  fails on the commit that breaks it rather than in the next morning's cron
+  mail.
+
 ## v0.14.0 — 2026-09-27
 
 - **New: virtual numbers, texts and dropdowns can be written, not just read.**

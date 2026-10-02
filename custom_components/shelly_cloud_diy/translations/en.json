@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Shelly Cloud DIY",
-        "description": "Connect Home Assistant to the Shelly Cloud. Open the Shelly App → User settings → Authorization cloud key → GET KEY to obtain both values below.",
+        "description": "Connect Home Assistant to the Shelly Cloud. Open the Shelly Smart Control app → Settings → Access and permissions → Get key to obtain both values below.",
         "data": {
           "auth_key": "Authorization cloud key",
           "server_uri": "Server URI",
@@ -11,7 +11,7 @@
           "local_gateway_url": "Local gateway URL (optional, for EM historical data)"
         },
         "data_description": {
-          "auth_key": "The long string shown under Authorization cloud key in the Shelly App.",
+          "auth_key": "The long string the Shelly Smart Control app shows under Access and permissions.",
           "server_uri": "The hostname shown below the key, e.g. shelly-42-eu.shelly.cloud.",
           "poll_interval": "How often Home Assistant polls Shelly Cloud for state. Default 5 s; range 3–60 s. Shelly enforces a 1 req/s rate limit.",
           "local_gateway_url": "Only needed if you use a local Shelly gateway to back-fill historical energy data."
@@ -31,7 +31,7 @@
       },
       "reauth_confirm": {
         "title": "Re-authenticate Shelly Cloud DIY",
-        "description": "The Shelly Cloud rejected the stored Authorization cloud key. Paste a fresh key from the Shelly App (User settings → Authorization cloud key) to restore access.",
+        "description": "The Shelly Cloud rejected the stored Authorization cloud key. Paste a fresh key from the Shelly Smart Control app (Settings → Access and permissions → Get key) to restore access.",
         "data": {
           "auth_key": "Authorization cloud key"
         }

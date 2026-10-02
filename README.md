@@ -399,9 +399,11 @@ Devices & Services → Shelly Cloud DIY → ⋮ → Reload) forces a fresh cloud
 The Cloud Control API is self-service. You do not need to contact Shelly, file a
 form, or wait for approval.
 
-1. Open the **Shelly App**.
-2. Go to **User settings → Authorization cloud key**.
-3. Tap **GET KEY**.
+1. Open the **Shelly Smart Control app**.
+2. Go to **Settings → Access and permissions**. Depending on the app version
+   that section sits under *Home* or under *User settings*; the section name is
+   the reliable part.
+3. Tap **Get key**.
 4. You receive two values: an **`auth_key`** (a long opaque string) and a
    **server URI** (e.g. `shelly-42-eu.shelly.cloud`).
 5. Both values are pasted into the Home Assistant config flow during setup.
