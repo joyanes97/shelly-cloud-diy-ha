@@ -119,6 +119,7 @@ cannot see — and the two run side by side.
 | 🌡️ **BLU TRV valves** | Thermostatic valves behind a BLU Gateway Gen3 become climate entities — room temperature, setpoint, valve position, battery — under the names you gave them in the Shelly app. Changing the setpoint needs cloud control (see below). | ✅ shipped |
 | 📶 **BLU gateway signal** | The signal the bridging gateway reports for a Bluetooth device — the only signal figure a BLU sensor has, with the gateway's id as an attribute. | ✅ shipped |
 | 🆙 **Firmware update flag** | Tells you a Gen2+ device has an update waiting, with the offered version. A flag, not an installer. | ✅ shipped |
+| 🏷️ **BLU firmware version** | The firmware a Bluetooth device runs, as a diagnostic sensor — the only firmware figure a BLU device has. | 🔜 next release |
 | 📈 **Energy history import** | Imports historical energy data into Home Assistant long-term statistics. | ✅ shipped |
 | ⚙️ **Config + options flow** | Paste your `auth_key`; tune the poll interval and per-device enablement later. | ✅ shipped |
 | 🌍 **Localised UI** | English and German translations for every user-visible string. | ✅ shipped |
@@ -259,7 +260,7 @@ none:
 typical account most devices have one; a card that is permanently lit is a card
 you stop reading, including on the day it reports a device cooking at 85 °C.
 
-Alongside the card, three diagnostic entities surface readings that were in the
+Alongside the card, four diagnostic entities surface readings that were in the
 data all along and went nowhere:
 
 - **Wi-Fi signal** on every Gen2+ device.
@@ -270,6 +271,9 @@ data all along and went nowhere:
 - **Firmware update**, a flag on every Gen2+ device that reports one, with the
   offered version as an attribute. It is a flag, not an installer — flashing
   firmware stays with the local integration.
+- **Firmware version** on every Bluetooth (BLU) device that reports one — the
+  counterpart to the flag above for devices that have no update block. It is
+  how a sensor still running a release candidate stands out from its siblings.
 
 Device diagnostics also carry a *coverage* section naming the parts of a
 device's payload that still produce no entity, so a gap turns up in a bug report

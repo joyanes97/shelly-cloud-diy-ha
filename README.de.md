@@ -125,6 +125,7 @@ die Shellys, die sie nicht sieht — und beide laufen nebeneinander.
 | 🌡️ **BLU-TRV-Ventile** | Heizkörperthermostate hinter einem BLU Gateway Gen3 werden zu Climate-Entitäten — Raumtemperatur, Sollwert, Ventilstellung, Batterie — unter den Namen, die du in der Shelly-App vergeben hast. Den Sollwert zu ändern braucht die Cloud-Steuerung (siehe unten). | ✅ ausgeliefert |
 | 📶 **BLU-Gateway-Signal** | Das Signal, das das brückende Gateway für ein Bluetooth-Gerät meldet — die einzige Signalzahl, die ein BLU-Sensor hat, mit der Gateway-ID als Attribut. | ✅ ausgeliefert |
 | 🆙 **Firmware-Update-Kennzeichen** | Zeigt, dass für ein Gen2+-Gerät ein Update bereitliegt, mit der angebotenen Version. Ein Hinweis, kein Installer. | ✅ ausgeliefert |
+| 🏷️ **BLU-Firmware-Version** | Die Firmware, die ein Bluetooth-Gerät fährt, als Diagnose-Sensor — die einzige Firmware-Angabe, die ein BLU-Gerät hat. | 🔜 nächstes Release |
 | 📈 **Energie-Verlaufsimport** | Importiert historische Energiedaten in die Home-Assistant-Langzeitstatistik. | ✅ ausgeliefert |
 | ⚙️ **Config- + Options-Flow** | `auth_key` einfügen; Poll-Intervall und Geräte-Auswahl später anpassen. | ✅ ausgeliefert |
 | 🌍 **Lokalisierte UI** | Englische und deutsche Übersetzungen für jeden sichtbaren Text. | ✅ ausgeliefert |
@@ -272,7 +273,7 @@ Auf einem typischen Konto hat die Mehrheit der Geräte eines offen; eine Karte,
 die dauerhaft leuchtet, ist eine Karte, die du nicht mehr liest — auch an dem
 Tag, an dem sie ein Gerät bei 85 °C meldet.
 
-Neben der Karte machen drei Diagnose-Entitäten Werte sichtbar, die die ganze
+Neben der Karte machen vier Diagnose-Entitäten Werte sichtbar, die die ganze
 Zeit in den Daten lagen und nirgends ankamen:
 
 - **WLAN-Signal** auf jedem Gen2+-Gerät.
@@ -283,6 +284,10 @@ Zeit in den Daten lagen und nirgends ankamen:
 - **Firmware-Update**, ein Kennzeichen auf jedem Gen2+-Gerät, das eines meldet,
   mit der angebotenen Version als Attribut. Ein Kennzeichen, kein Installer —
   das Flashen bleibt bei der lokalen Integration.
+- **Firmware-Version** auf jedem Bluetooth-Gerät (BLU), das eine meldet — das
+  Gegenstück zum Kennzeichen oben für Geräte ohne Update-Block. Daran fällt ein
+  Sensor auf, der noch einen Release Candidate fährt, während seine Geschwister
+  längst weiter sind.
 
 Die Geräte-Diagnose enthält außerdem einen *coverage*-Abschnitt, der benennt,
 welche Teile des Payloads bei uns noch gar keine Entität erzeugen — so taucht

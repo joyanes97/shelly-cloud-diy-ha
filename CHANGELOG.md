@@ -9,6 +9,18 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## Unreleased
+
+- **New: a "Firmware version" diagnostic sensor on every Bluetooth (BLU)
+  device.** The cloud has always carried the version a BLU device runs, and
+  nothing showed it: the Firmware update flag reads a block only Wi-Fi devices
+  have, and the device page lists no software version. On the account it was
+  measured against, 20 of 24 reported versions were 1.0.16 while two devices
+  were still on the release candidate 1.0.9-rc3 — invisible until now. Read
+  from the poll that already runs, so it costs no extra request. Five of the
+  29 measured devices report an empty version; those get no entity until the
+  version is known, the same rule the gateway signal sensor follows.
+
 ## v0.15.0 — 2026-10-03
 
 - **Fix: Home Assistant no longer demands a new Authorization cloud key over a

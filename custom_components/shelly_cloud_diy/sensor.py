@@ -860,7 +860,46 @@ def _create_ble_sensors(
                 )
             )
 
+    # fwversion:0.version — the firmware the BLU device itself runs. Read by
+    # name for the same reason as ``reporter``: the loop above only reaches
+    # keys with a BLE_SENSORS entry, and a version string is not a reading
+    # that table can describe.
+    #
+    # In the recorded account snapshot the key is on 29 of 29 gateway-bridged
+    # devices, but ``version`` is an empty string on 5 of them (2 of the
+    # same SBMO-003Z model that reports 1.0.16 on 17 others). The empty value
+    # is therefore not a model trait but a version the gateway has not
+    # learned yet, so this gates the way the signal sensor does: on a usable
+    # value, not on the key. An entity built for an empty string could only
+    # ever say "unknown"; one built once the version is known says something.
+    # The price is the same as there: a device whose version arrives later
+    # gets its entity at the next start.
+    fwversion = status.get("fwversion:0")
+    if isinstance(fwversion, dict) and _usable_version(fwversion.get("version")):
+        uid = f"{device_id}_firmware_version"
+        if uid not in created:
+            created.add(uid)
+            entities.append(
+                BleFirmwareVersionSensor(
+                    coordinator=coordinator, device_id=device_id
+                )
+            )
+
     return entities
+
+
+def _usable_version(value: Any) -> str | None:
+    """Return a firmware version string, or ``None`` when none was reported.
+
+    The cloud says "not known yet" with an empty string rather than a
+    missing field, so emptiness — not presence — is the test. Anything that
+    is not a string is treated as malformed rather than stringified: a
+    version reading "None" or "0" would look like a real build.
+    """
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
 
 
 class RpcSensor(ShellyBaseEntity, SensorEntity):
@@ -1090,3 +1129,55 @@ class BleReporterSignalSensor(ShellyBaseEntity, SensorEntity):
         if gateway is None:
             return None
         return {"gateway_id": str(gateway)}
+
+
+class BleFirmwareVersionSensor(ShellyBaseEntity, SensorEntity):
+    """The firmware a BLU device runs (``fwversion:0.version``).
+
+    Plain text, no device class: a version is not a measurement and has no
+    unit, and HA's update platform would promise an install path this
+    integration does not have. Flashing a BLU device stays with the Shelly
+    app.
+
+    It exists because a BLU device has nothing else to say about its
+    firmware. The ``Firmware update`` flag reads ``sys.available_updates``,
+    a block only Wi-Fi devices carry, and the device registry entry built in
+    ``ShellyBaseEntity.device_info`` has no software version either. The
+    recorded account shows why the number matters: 20 of 24 known versions
+    are 1.0.16, while two devices are still on the release candidate
+    1.0.9-rc3 — a fact no entity surfaced.
+
+    Created enabled, for the reason the ``Firmware update`` flag gives: it
+    is meaningful on every device that reports it, sits in the collapsed
+    diagnostics section, and changes only when the firmware does, so it
+    costs no recorder churn. Hidden by default, the rc3 devices above would
+    have stayed as invisible as they were.
+    """
+
+    _attr_name = "Firmware version"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = True
+    # See BleBatteryPercentSensor: declared so the diagnostics coverage
+    # report can tell that ``fwversion:0`` is a surfaced key and not a gap.
+    # Unlike ``sys`` on the Firmware update flag, claiming the whole key is
+    # honest here — besides ``id`` the block holds nothing but the version.
+    _status_key = "fwversion:0"
+
+    def __init__(
+        self,
+        *,
+        coordinator: ShellyCloudCoordinator,
+        device_id: str,
+    ) -> None:
+        super().__init__(coordinator, device_id, 0)
+        self._attr_unique_id = f"{device_id}_firmware_version"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the firmware version, or ``None`` while none is reported."""
+        fwversion = self.device_status.get("fwversion:0")
+        if not isinstance(fwversion, dict):
+            return None
+        # Same filter the builder gated on, so a version that goes blank
+        # reads as unknown rather than as an empty string.
+        return _usable_version(fwversion.get("version"))
