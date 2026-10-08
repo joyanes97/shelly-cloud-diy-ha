@@ -9,7 +9,7 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
-## Unreleased
+## v0.16.0 — 2026-10-08
 
 - **New: a "Firmware version" diagnostic sensor on every Bluetooth (BLU)
   device.** The cloud has always carried the version a BLU device runs, and

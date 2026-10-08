@@ -125,7 +125,7 @@ die Shellys, die sie nicht sieht — und beide laufen nebeneinander.
 | 🌡️ **BLU-TRV-Ventile** | Heizkörperthermostate hinter einem BLU Gateway Gen3 werden zu Climate-Entitäten — Raumtemperatur, Sollwert, Ventilstellung, Batterie — unter den Namen, die du in der Shelly-App vergeben hast. Den Sollwert zu ändern braucht die Cloud-Steuerung (siehe unten). | ✅ ausgeliefert |
 | 📶 **BLU-Gateway-Signal** | Das Signal, das das brückende Gateway für ein Bluetooth-Gerät meldet — die einzige Signalzahl, die ein BLU-Sensor hat, mit der Gateway-ID als Attribut. | ✅ ausgeliefert |
 | 🆙 **Firmware-Update-Kennzeichen** | Zeigt, dass für ein Gen2+-Gerät ein Update bereitliegt, mit der angebotenen Version. Ein Hinweis, kein Installer. | ✅ ausgeliefert |
-| 🏷️ **BLU-Firmware-Version** | Die Firmware, die ein Bluetooth-Gerät fährt, als Diagnose-Sensor — die einzige Firmware-Angabe, die ein BLU-Gerät hat. | 🔜 nächstes Release |
+| 🏷️ **BLU-Firmware-Version** | Die Firmware, die ein Bluetooth-Gerät fährt, als Diagnose-Sensor — die einzige Firmware-Angabe, die ein BLU-Gerät hat. | ✅ ausgeliefert |
 | 📈 **Energie-Verlaufsimport** | Importiert historische Energiedaten in die Home-Assistant-Langzeitstatistik. | ✅ ausgeliefert |
 | ⚙️ **Config- + Options-Flow** | `auth_key` einfügen; Poll-Intervall und Geräte-Auswahl später anpassen. | ✅ ausgeliefert |
 | 🌍 **Lokalisierte UI** | Englische und deutsche Übersetzungen für jeden sichtbaren Text. | ✅ ausgeliefert |
