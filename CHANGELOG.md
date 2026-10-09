@@ -9,6 +9,20 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## Unreleased
+
+- **Fix: a temperature below absolute zero is no longer recorded.** Right
+  after a Home Assistant restart, a Bluetooth weather station behind a BLU
+  gateway briefly reported -999 °C before its first real reading 5–10 seconds
+  later. That one value went into the history and pulled the hour's long-term
+  statistics down to -999. A temperature below -273.15 °C cannot be a
+  measurement, so it now counts as "no reading" and the entity stays unknown
+  until a real value arrives. The rule is the physical limit rather than a
+  list of placeholder values, and it applies to every temperature the
+  integration shows: Bluetooth temperature and dew point, Gen2+ temperature
+  sensors and device temperatures, Gen1 temperature, and the BLU TRV's
+  current and target temperature. Reported in #51.
+
 ## v0.16.0 — 2026-10-08
 
 - **New: a "Firmware version" diagnostic sensor on every Bluetooth (BLU)

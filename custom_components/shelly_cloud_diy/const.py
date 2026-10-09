@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from homeassistant.const import Platform
+from homeassistant.const import Platform, UnitOfTemperature
 
 DOMAIN = "shelly_cloud_diy"
 
@@ -285,6 +285,49 @@ VIRTUAL_TEXT_FALLBACK_MAX_LEN = 255
 # there rather than spending a relay round trip to be told no.
 BLUTRV_MIN_TEMP_C = 4.0
 BLUTRV_MAX_TEMP_C = 30.0
+
+
+# ── Physically impossible temperatures ─────────────────────────────
+#
+# Absolute zero, per unit. A reading below it cannot be a measurement, so it
+# is a placeholder and is reported as "no reading" instead (#51).
+#
+# Measured: an ECOWITT WS90 behind a BLU gateway reported ``tC: -999`` twice,
+# both times right after a Home Assistant restart (2026-10-06 12:07:41 and
+# 2026-10-08 14:21:42 UTC), followed by a real value 5–10 s later. Passed
+# through, that one poll landed in the history and pulled the hourly
+# long-term statistics (min/mean) down to -999 for the whole hour.
+#
+# The rule is the physical limit, NOT a list of sentinels. -999 is the only
+# placeholder ever observed; other values (-9999, 65535, …) are guesses and
+# would be a hypothesis presented as a finding. The limit catches -999 and
+# any other impossible value alike, and cannot reject a real reading.
+#
+# Strictly *below*: absolute zero itself is unattainable too, but nothing has
+# ever reported it, and the line is the physical one rather than a margin.
+_ABSOLUTE_ZERO: dict[str, float] = {
+    UnitOfTemperature.CELSIUS: -273.15,
+    UnitOfTemperature.FAHRENHEIT: -459.67,
+    UnitOfTemperature.KELVIN: 0.0,
+}
+
+
+def plausible_temperature(
+    value: Any, unit: str | None = UnitOfTemperature.CELSIUS
+) -> Any:
+    """Return ``value``, or ``None`` if it lies below absolute zero.
+
+    Anything that is not a number — ``None``, a missing field — is returned
+    unchanged: this judges physics, not shape. ``bool`` is not treated as a
+    number, for the same reason as in ``device_health._as_number``. An
+    unknown unit passes through, because there is no limit to judge it by.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    floor = _ABSOLUTE_ZERO.get(unit) if unit is not None else None
+    if floor is not None and value < floor:
+        return None
+    return value
 
 
 def is_gen2_status(status: dict[str, Any]) -> bool:

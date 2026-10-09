@@ -38,6 +38,7 @@ from .const import (
     BLUTRV_MIN_TEMP_C,
     DOMAIN,
     SIGNAL_DEVICE_REMOVED,
+    plausible_temperature,
 )
 from .coordinator import ShellyCloudCoordinator, SIGNAL_NEW_DEVICE
 from .entities.base import ShellyBaseEntity
@@ -204,15 +205,25 @@ class ShellyBluTrvClimate(ShellyBaseEntity, ClimateEntity):
             return ClimateEntityFeature.TARGET_TEMPERATURE
         return ClimateEntityFeature(0)
 
+    def _celsius(self, field: str) -> float | None:
+        """A temperature field of the valve, or None if it is no reading.
+
+        Below absolute zero counts as no reading, as on every temperature
+        sensor (#51) — a placeholder must not reach the history as a value.
+        """
+        value = self._component().get(field)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        value = plausible_temperature(value)
+        return None if value is None else float(value)
+
     @property
     def current_temperature(self) -> float | None:
-        value = self._component().get("current_C")
-        return float(value) if isinstance(value, (int, float)) else None
+        return self._celsius("current_C")
 
     @property
     def target_temperature(self) -> float | None:
-        value = self._component().get("target_C")
-        return float(value) if isinstance(value, (int, float)) else None
+        return self._celsius("target_C")
 
     @property
     def hvac_action(self) -> HVACAction:

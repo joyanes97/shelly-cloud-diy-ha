@@ -25,6 +25,7 @@ from .const import (
     SIGNAL_DEVICE_REMOVED,
     device_gen,
     is_gen2_status,
+    plausible_temperature,
 )
 from .coordinator import ShellyCloudCoordinator, SIGNAL_NEW_DEVICE
 from .entities.base import ShellyBaseEntity
@@ -696,6 +697,25 @@ class RpcVirtualSensor(ShellyBaseEntity, SensorEntity):
         return component.get("value")
 
 
+def _plausible_reading(
+    description: BlockSensorDescription | RpcSensorDescription | BleSensorDescription,
+    value: Any,
+) -> Any:
+    """Drop a temperature below absolute zero; pass anything else through.
+
+    Keyed on the device class rather than on field names (``tC``, ``value``,
+    ``temperature``), so every temperature the three description tables
+    describe is covered — including the BLE dew point and the nested
+    ``switch:<n>.temperature.tC`` — and a temperature description added later
+    is covered without anyone remembering this. (#51)
+    """
+    if description.device_class == SensorDeviceClass.TEMPERATURE:
+        return plausible_temperature(
+            value, description.native_unit_of_measurement
+        )
+    return value
+
+
 class BlockSensor(ShellyBaseEntity, SensorEntity):
     """Gen1 Block sensor."""
 
@@ -750,7 +770,7 @@ class BlockSensor(ShellyBaseEntity, SensorEntity):
         if value is not None and self._description.value_fn:
             value = self._description.value_fn(value)
 
-        return value
+        return _plausible_reading(self._description, value)
 
 
 def _usable_rssi(value: Any) -> int | float | None:
@@ -949,7 +969,7 @@ class RpcSensor(ShellyBaseEntity, SensorEntity):
         if value is not None and self._description.value_fn:
             value = self._description.value_fn(value)
 
-        return value
+        return _plausible_reading(self._description, value)
 
 
 class BleSensor(ShellyBaseEntity, SensorEntity):
@@ -999,7 +1019,9 @@ class BleSensor(ShellyBaseEntity, SensorEntity):
         payload = self.device_status.get(self._status_key)
         if not isinstance(payload, dict):
             return None
-        return payload.get(self._description.value_field)
+        return _plausible_reading(
+            self._description, payload.get(self._description.value_field)
+        )
 
 
 class BleBatteryPercentSensor(ShellyBaseEntity, SensorEntity):
