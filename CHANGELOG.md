@@ -22,6 +22,10 @@ which has no release pages.
   integration shows: Bluetooth temperature and dew point, Gen2+ temperature
   sensors and device temperatures, Gen1 temperature, and the BLU TRV's
   current and target temperature. Reported in #51.
+- **Docs: the Firmware update flag works on sleeping battery devices too.**
+  The feature table in both READMEs now says so: verified on an H&T Gen3, the
+  flag is there while the device sleeps and survives a Home Assistant restart
+  (#32) — the built-in integration loses it on restart.
 
 ## v0.16.0 — 2026-10-08
 

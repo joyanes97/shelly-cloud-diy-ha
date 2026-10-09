@@ -118,7 +118,7 @@ cannot see — and the two run side by side.
 | 📜 **Script state** | Whether each of a device's scripts is running — the one way to notice a script that died on a device you can only reach through the cloud. No opt-in needed; starting and stopping one does need cloud control. | ✅ shipped |
 | 🌡️ **BLU TRV valves** | Thermostatic valves behind a BLU Gateway Gen3 become climate entities — room temperature, setpoint, valve position, battery — under the names you gave them in the Shelly app. Changing the setpoint needs cloud control (see below). | ✅ shipped |
 | 📶 **BLU gateway signal** | The signal the bridging gateway reports for a Bluetooth device — the only signal figure a BLU sensor has, with the gateway's id as an attribute. | ✅ shipped |
-| 🆙 **Firmware update flag** | Tells you a Gen2+ device has an update waiting, with the offered version. A flag, not an installer. | ✅ shipped |
+| 🆙 **Firmware update flag** | Tells you a Gen2+ device has an update waiting, with the offered version. Also on sleeping battery devices, and it survives a Home Assistant restart (verified on an H&T Gen3, [#32](https://github.com/notDIRK/shelly-cloud-diy-ha/issues/32)) — the built-in integration loses it on restart. A flag, not an installer. | ✅ shipped |
 | 🏷️ **BLU firmware version** | The firmware a Bluetooth device runs, as a diagnostic sensor — the only firmware figure a BLU device has. | ✅ shipped |
 | 📈 **Energy history import** | Imports historical energy data into Home Assistant long-term statistics. | ✅ shipped |
 | ⚙️ **Config + options flow** | Paste your `auth_key`; tune the poll interval and per-device enablement later. | ✅ shipped |
