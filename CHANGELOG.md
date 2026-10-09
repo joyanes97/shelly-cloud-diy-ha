@@ -9,7 +9,7 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
-## Unreleased
+## v0.16.1 — 2026-10-09
 
 - **Fix: a temperature below absolute zero is no longer recorded.** Right
   after a Home Assistant restart, a Bluetooth weather station behind a BLU
