@@ -9,6 +9,19 @@ full reasoning and the reporters' credits:
 the history is readable from a checkout alone, including on the Gitea mirror,
 which has no release pages.
 
+## v0.16.3 — 2026-10-26
+
+- **Fix: cloud control no longer asks to sign in again for a device in
+  another home.** With an account split into several homes, the cloud relay
+  answers `UNAUTHORIZED` for a device of a secondary home, and the
+  integration took that as an expired sign-in and started re-authentication.
+  `UNAUTHORIZED` now counts as an expired sign-in only for a device that has
+  already answered on the current connection; for any other device it is a
+  refusal for that device alone: no re-authentication, no cloud-control
+  switches for it, one warning in the log. Devices of a secondary home are
+  still not controllable over the cloud — the relay refuses them. Reported
+  and confirmed on hardware in #52.
+
 ## v0.16.2 — 2026-10-12
 
 - **Fix: several homes of one Shelly account can now be added.** An account
